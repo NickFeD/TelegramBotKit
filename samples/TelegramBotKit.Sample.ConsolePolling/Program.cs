@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Hosting;
+using TelegramBotKit.Hosting.DependencyInjection;
 
 await Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration(cfg =>
