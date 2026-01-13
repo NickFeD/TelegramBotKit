@@ -3,37 +3,28 @@ using System.Reflection;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using TelegramBotKit.Commands;
+using TelegramBotKit.Dispatching;
 using TelegramBotKit.Middleware;
 
 namespace TelegramBotKit.DependencyInjection;
 
 public sealed class TelegramBotKitBuilder
 {
+    private readonly List<Type> _middlewareTypes = new();
+
+    internal IReadOnlyList<Type> MiddlewareTypes => _middlewareTypes;
     internal TelegramBotKitBuilder(IServiceCollection services) => Services = services;
 
     public IServiceCollection Services { get; }
 
-    // Middleware
-    public TelegramBotKitBuilder Use(UpdateMiddleware middleware)
-    {
-        if (middleware is null) throw new ArgumentNullException(nameof(middleware));
-        Services.AddSingleton<IMiddlewareConfigurator>(new DelegateMiddlewareConfigurator(p => p.Use(middleware)));
-        return this;
-    }
 
-    public TelegramBotKitBuilder UseWhen(Func<BotContext, bool> predicate, UpdateMiddleware middleware)
+    /// <summary>
+    /// Добавить middleware-класс в пайплайн.
+    /// </summary>
+    public TelegramBotKitBuilder UseMiddleware<TMiddleware>()
+        where TMiddleware : class, IUpdateMiddleware
     {
-        if (predicate is null) throw new ArgumentNullException(nameof(predicate));
-        if (middleware is null) throw new ArgumentNullException(nameof(middleware));
-        Services.AddSingleton<IMiddlewareConfigurator>(new DelegateMiddlewareConfigurator(p => p.UseWhen(predicate, middleware)));
-        return this;
-    }
-
-    public TelegramBotKitBuilder Map<TPayload>(UpdateType updateType, Func<Update, TPayload?> extractor)
-        where TPayload : class
-    {
-        if (extractor is null) throw new ArgumentNullException(nameof(extractor));
-        Services.AddSingleton<IRegistryConfigurator>(new DelegateRegistryConfigurator(r => r.Map(updateType, extractor)));
+        _middlewareTypes.Add(typeof(TMiddleware));
         return this;
     }
 

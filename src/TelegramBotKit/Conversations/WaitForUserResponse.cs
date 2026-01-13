@@ -15,7 +15,7 @@ public sealed class WaitForUserResponse
     /// <summary>
     /// Ждёт следующее сообщение от (chatId, userId). Возвращает null по таймауту/отмене.
     /// </summary>
-    public async Task<Message?> WaitMessageAsync(
+    public async Task<Message?> WaitAsync(
         long chatId,
         long userId,
         TimeSpan timeout,

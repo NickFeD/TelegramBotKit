@@ -1,70 +1,38 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Hosting.DependencyInjection;
+using TelegramBotKit.Fallbacks;
+using TelegramBotKit.Hosting;          // <-- проект TelegramBotKit.Hosting
+using TelegramBotKit.Middleware;
+using TelegramBotKit.Sample.ConsolePolling;
 
-await Host.CreateDefaultBuilder(args)
-    .ConfigureAppConfiguration(cfg =>
-    {
-        cfg.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-        cfg.AddEnvironmentVariables();
-        cfg.AddUserSecrets<Program>(optional: true);
-    })
-    .ConfigureLogging(logging =>
-    {
-        logging.ClearProviders();
-        logging.AddConsole();
-        logging.SetMinimumLevel(LogLevel.Information);
-    })
-    .ConfigureServices((ctx, services) =>
-    {
-        // Core
-        var builder = services.AddTelegramBotKit(opt =>
-        {
-            // Можно хранить токен в appsettings.json или в UserSecrets/ENV
-            ctx.Configuration.GetSection("TelegramBotKit").Bind(opt);
+var builder = Host.CreateApplicationBuilder(args);
 
-            // на всякий случай: если токен не подхватился из конфига
-            if (string.IsNullOrWhiteSpace(opt.Token))
-                opt.Token = ctx.Configuration["TELEGRAM_TOKEN"] ?? string.Empty;
+builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
-            // polling настройки
-            // opt.Polling.MaxDegreeOfParallelism = 1; // если хочешь строго по порядку
-        });
+builder.Services.AddTelegramBotKit(opt =>
+{
+    builder.Configuration.GetSection("TelegramBotKit").Bind(opt);
+});
 
-        // Автоподхват команд с [Command] из сборки sample
-        builder.AddCommandsFromAssembly<StartCommand>();
+// Команды из текущей сборки sample
+builder.Services.AddCommandsFromAssemblies(Assembly.GetExecutingAssembly());
 
-        builder.Use(async (ctx, next) =>
-        {
-            var log = ctx.GetRequiredService<ILoggerFactory>().CreateLogger("TBK");
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+// Default handlers (чтобы видеть fallback)
+builder.Services.AddSingleton<IDefaultMessageHandler, SampleDefaultHandlers>();
+builder.Services.AddSingleton<IDefaultCallbackHandler, SampleDefaultHandlers>();
+builder.Services.AddSingleton<IDefaultUpdateHandler, SampleDefaultHandlers>();
 
-            // пример Items
-            ctx.Items["traceId"] = Guid.NewGuid().ToString("N");
+// Middleware (лог + traceId в ctx.Items)
+builder.Services.AddSingleton<IMiddlewareConfigurator, SampleMiddlewareConfigurator>();
 
-            log.LogInformation("-> Update {Type} (traceId={traceId})",
-                ctx.Update.Type, ctx.Items["traceId"]);
+// Дополнительные маппинги UpdateType -> payload (пример расширения)
+builder.Services.AddSingleton<TelegramBotKit.Dispatching.IRegistryConfigurator, SampleRegistryConfigurator>();
 
-            try
-            {
-                await next();
-                log.LogInformation("<- Done {Type} ({ms}ms) (traceId={traceId})",
-                    ctx.Update.Type, sw.ElapsedMilliseconds, ctx.Items["traceId"]);
-            }
-            catch (Exception ex)
-            {
-                log.LogError(ex, "!! Error {Type} (traceId={traceId})",
-                    ctx.Update.Type, ctx.Items["traceId"]);
-                throw;
-            }
-        });
+// Запуск polling
+builder.Services.AddHostedService<PollingHostedService>();
 
-
-        // Hosting (Polling)
-        services.AddTelegramBotKitPolling();
-    })
-    .Build()
-    .RunAsync();
+var host = builder.Build();
+await host.RunAsync();

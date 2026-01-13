@@ -1,83 +1,58 @@
-﻿namespace TelegramBotKit.Middleware;
+﻿using Microsoft.Extensions.DependencyInjection;
+
+namespace TelegramBotKit.Middleware;
 
 /// <summary>
-/// Middleware для обработки одного апдейта.
+/// Аналог ASP.NET RequestDelegate: готовый кусок пайплайна.
 /// </summary>
-public delegate Task UpdateMiddleware(BotContext ctx, Func<Task> next);
+public delegate Task BotContextDelegate(BotContext ctx);
 
 /// <summary>
-/// Простой middleware pipeline, но для BotContext.
+/// Статичный пайплайн middleware
 /// </summary>
 public sealed class MiddlewarePipeline
 {
-    private readonly List<UpdateMiddleware> _middlewares = new();
-    private volatile bool _isFrozen;
+    private readonly IServiceProvider _rootServices;
+    private readonly Type[] _middlewareTypes;
 
-    /// <summary>
-    /// Добавить middleware в конец цепочки.
-    /// Вызывать на этапе конфигурации.
-    /// </summary>
-    public MiddlewarePipeline Use(UpdateMiddleware middleware)
+    public MiddlewarePipeline(IServiceProvider rootServices, IEnumerable<Type> middlewareTypes)
     {
-        if (middleware is null) throw new ArgumentNullException(nameof(middleware));
-        EnsureNotFrozen();
+        _rootServices = rootServices ?? throw new ArgumentNullException(nameof(rootServices));
+        _middlewareTypes = (middlewareTypes ?? Array.Empty<Type>()).ToArray();
 
-        _middlewares.Add(middleware);
-        return this;
-    }
-
-    /// <summary>
-    /// Добавить middleware, которое будет вызываться только если условие true.
-    /// </summary>
-    public MiddlewarePipeline UseWhen(Func<BotContext, bool> predicate, UpdateMiddleware middleware)
-    {
-        if (predicate is null) throw new ArgumentNullException(nameof(predicate));
-        if (middleware is null) throw new ArgumentNullException(nameof(middleware));
-        EnsureNotFrozen();
-
-        _middlewares.Add(async (ctx, next) =>
+        // Валидация типов один раз
+        for (int i = 0; i < _middlewareTypes.Length; i++)
         {
-            if (predicate(ctx))
-                await middleware(ctx, next).ConfigureAwait(false);
-            else
-                await next().ConfigureAwait(false);
-        });
-
-        return this;
+            var t = _middlewareTypes[i];
+            if (!typeof(IUpdateMiddleware).IsAssignableFrom(t))
+                throw new ArgumentException($"Middleware type must implement IUpdateMiddleware: {t.FullName}");
+        }
     }
 
     /// <summary>
-    /// "Заморозить" pipeline: после этого Use/UseWhen нельзя вызывать.
-    /// Это защищает от гонок и неожиданных изменений во время работы.
+    /// Собирает пайплайн вокруг terminal.
     /// </summary>
-    public void Freeze() => _isFrozen = true;
-
-    /// <summary>
-    /// Выполнить pipeline и затем финальный обработчик.
-    /// </summary>
-    public Task ExecuteAsync(BotContext ctx, Func<Task> terminal)
+    public BotContextDelegate Build(BotContextDelegate terminal)
     {
-        if (ctx is null) throw new ArgumentNullException(nameof(ctx));
         if (terminal is null) throw new ArgumentNullException(nameof(terminal));
 
-        // Собираем цепочку один раз при первом запуске после Freeze(),
-        // но даже без кэша это ок (кол-во middleware обычно небольшое).
-        // Если захочешь — позже добавим кэш delegate.
-        Func<Task> next = terminal;
-
-        for (int i = _middlewares.Count - 1; i >= 0; i--)
+        // Создаём инстансы middleware один раз (как ASP.NET)
+        var middlewares = new IUpdateMiddleware[_middlewareTypes.Length];
+        for (int i = 0; i < _middlewareTypes.Length; i++)
         {
-            var current = _middlewares[i];
-            var capturedNext = next;
-            next = () => current(ctx, capturedNext);
+            middlewares[i] = (IUpdateMiddleware)ActivatorUtilities.CreateInstance(_rootServices, _middlewareTypes[i]);
         }
 
-        return next();
-    }
+        // Сборка "скомпилированного" делегата
+        BotContextDelegate app = terminal;
 
-    private void EnsureNotFrozen()
-    {
-        if (_isFrozen)
-            throw new InvalidOperationException("MiddlewarePipeline is frozen. Configure it before bot starts.");
+        for (int i = middlewares.Length - 1; i >= 0; i--)
+        {
+            var mw = middlewares[i];
+            var next = app;
+            app = ctx => mw.InvokeAsync(ctx, next);
+        }
+
+        return app;
     }
 }

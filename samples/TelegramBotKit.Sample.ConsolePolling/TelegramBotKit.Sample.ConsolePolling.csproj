@@ -9,6 +9,11 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\TelegramBotKit.Hosting\TelegramBotKit.Hosting.csproj" />
     <ProjectReference Include="..\..\src\TelegramBotKit\TelegramBotKit.csproj" />

@@ -1,89 +1,85 @@
-﻿using Microsoft.Extensions.Logging;
-using Telegram.Bot;
+﻿using Telegram.Bot;
 using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
-
-/// <summary>
-/// Модель исходящего текстового сообщения (чтобы не путать с методом bot.SendMessage).
-/// </summary>
-public sealed record OutgoingMessage(
-    string Text,
-    ParseMode ParseMode = default,
-    LinkPreviewOptions? LinkPreviewOptions = null,
-    IEnumerable<MessageEntity>? Entities = null,
-    ReplyMarkup? ReplyMarkup = null);
 
 public sealed class MessageSender : IMessageSender
 {
     private readonly ITelegramBotClient _bot;
-    private readonly ILogger<MessageSender> _log;
 
-    public MessageSender(ITelegramBotClient bot, ILogger<MessageSender> log)
+    public MessageSender(ITelegramBotClient bot)
+        => _bot = bot ?? throw new ArgumentNullException(nameof(bot));
+
+    public Task<Message> SendText(long chatId, SendText msg, CancellationToken ct = default)
     {
-        _bot = bot;
-        _log = log;
-    }
+        if (chatId == 0) throw new ArgumentOutOfRangeException(nameof(chatId));
+        ValidateText(msg?.Text);
 
-    public Task<Message> SendAsync(
-        ChatId chatId,
-        OutgoingMessage msg,
-        ReplyParameters? replyParameters = null,
-        CancellationToken ct = default)
-    {
-        _log.LogDebug("SendMessage chat:{chatId} text:{text}", chatId, msg.Text);
-
-        // В v22 параметры местами переставлялись — безопаснее использовать именованные аргументы.
         return _bot.SendMessage(
             chatId: chatId,
             text: msg.Text,
-            parseMode: msg.ParseMode == default ? ParseMode.None : msg.ParseMode,
-            entities: msg.Entities?.ToArray(),
+            parseMode: msg.ParseMode,
             linkPreviewOptions: msg.LinkPreviewOptions,
-            replyParameters: replyParameters,
+            entities: msg.Entities,
             replyMarkup: msg.ReplyMarkup,
+            disableNotification: msg.DisableNotification,
+            protectContent: msg.ProtectContent,
             cancellationToken: ct);
     }
 
-    public Task<Message> EditTextAsync(
-        ChatId chatId,
-        int messageId,
-        OutgoingMessage msg,
-        CancellationToken ct = default)
+    public Task<Message> ReplyText(Message replyTo, SendText msg, CancellationToken ct = default)
     {
-        _log.LogDebug("EditMessageText chat:{chatId} msg:{messageId} text:{text}", chatId, messageId, msg.Text);
+        if (replyTo is null) throw new ArgumentNullException(nameof(replyTo));
+        ValidateText(msg?.Text);
+
+        return _bot.SendMessage(
+            chatId: replyTo.Chat.Id,
+            text: msg.Text,
+            parseMode: msg.ParseMode,
+            linkPreviewOptions: msg.LinkPreviewOptions,
+            entities: msg.Entities,
+            replyParameters: new ReplyParameters { MessageId = replyTo.Id },
+            replyMarkup: msg.ReplyMarkup,
+            disableNotification: msg.DisableNotification,
+            protectContent: msg.ProtectContent,
+            cancellationToken: ct);
+    }
+
+    public Task<Message> EditText(long chatId, int messageId, EditText edit, CancellationToken ct = default)
+    {
+        if (chatId == 0) throw new ArgumentOutOfRangeException(nameof(chatId));
+        if (messageId <= 0) throw new ArgumentOutOfRangeException(nameof(messageId));
+        ValidateText(edit?.Text);
 
         return _bot.EditMessageText(
             chatId: chatId,
             messageId: messageId,
-            text: msg.Text,
-            parseMode: msg.ParseMode == default ? ParseMode.None : msg.ParseMode,
-            entities: msg.Entities?.ToArray(),
-            linkPreviewOptions: msg.LinkPreviewOptions,
-            replyMarkup: msg.ReplyMarkup as InlineKeyboardMarkup, // editMessageText принимает inline keyboard
+            text: edit.Text,
+            parseMode: edit.ParseMode,
+            linkPreviewOptions: edit.LinkPreviewOptions,
+            entities: edit.Entities,
+            replyMarkup: edit.ReplyMarkup,
             cancellationToken: ct);
     }
 
-    public Task<Message> EditReplyMarkupAsync(
-        ChatId chatId,
-        int messageId,
-        InlineKeyboardMarkup? replyMarkup = null,
-        CancellationToken ct = default)
+    public Task AnswerCallback(string callbackQueryId, AnswerCallback answer, CancellationToken ct = default)
     {
-        _log.LogDebug("EditMessageReplyMarkup chat:{chatId} msg:{messageId}", chatId, messageId);
+        if (string.IsNullOrWhiteSpace(callbackQueryId))
+            throw new ArgumentException("callbackQueryId is required.", nameof(callbackQueryId));
 
-        return _bot.EditMessageReplyMarkup(
-            chatId: chatId,
-            messageId: messageId,
-            replyMarkup: replyMarkup,
+        answer ??= new AnswerCallback();
+
+        return _bot.AnswerCallbackQuery(
+            callbackQueryId: callbackQueryId,
+            text: answer.Text,
+            showAlert: answer.ShowAlert,
+            url: answer.Url,
             cancellationToken: ct);
     }
 
-    public Task DeleteAsync(ChatId chatId, int messageId, CancellationToken ct = default)
+    private static void ValidateText(string? text)
     {
-        _log.LogDebug("DeleteMessage chat:{chatId} msg:{messageId}", chatId, messageId);
-        return _bot.DeleteMessage(chatId: chatId, messageId: messageId, cancellationToken: ct);
+        if (string.IsNullOrWhiteSpace(text))
+            throw new TelegramBotKitConfigurationException("Message text is required (not null/empty).");
     }
 }

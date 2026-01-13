@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using System.Reflection;
 using Telegram.Bot;
@@ -7,6 +8,7 @@ using Telegram.Bot.Types.Enums;
 using TelegramBotKit.Commands;
 using TelegramBotKit.Conversations;
 using TelegramBotKit.Dispatching;
+using TelegramBotKit.Fallbacks;
 using TelegramBotKit.Handlers;
 using TelegramBotKit.Messaging;
 using TelegramBotKit.Middleware;
@@ -52,17 +54,15 @@ public static class TelegramBotKitServiceCollectionExtensions
         services.AddScoped<IUpdatePayloadHandler<Message>, MessageUpdateHandler>();
         services.AddScoped<IUpdatePayloadHandler<CallbackQuery>, CallbackQueryUpdateHandler>();
 
+        // Default handlers (noop by default)
+        services.TryAddSingleton<IDefaultUpdateHandler, NoopDefaultUpdateHandler>();
+        services.TryAddSingleton<IDefaultMessageHandler, NoopDefaultMessageHandler>();
+        services.TryAddSingleton<IDefaultCallbackHandler, NoopDefaultCallbackHandler>();
+
+        var builder = new TelegramBotKitBuilder(services);
 
         // Pipeline
-        services.AddSingleton<MiddlewarePipeline>(sp =>
-        {
-            var pipeline = new MiddlewarePipeline();
-            foreach (var cfg in sp.GetServices<IMiddlewareConfigurator>())
-                cfg.Configure(pipeline);
-
-            pipeline.Freeze();
-            return pipeline;
-        });
+        services.AddSingleton(sp => new MiddlewarePipeline(sp, builder.MiddlewareTypes));
 
         // Registry + default mappings
         services.AddSingleton<UpdateHandlerRegistry>(sp =>

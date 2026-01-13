@@ -22,13 +22,22 @@ public sealed class CommandRouter
         _callbackCommands = callbackCommands?.ToList() ?? throw new ArgumentNullException(nameof(callbackCommands));
     }
 
+    /// <summary>
+    /// Back-compat: старый метод. Теперь просто вызывает Try-версию.
+    /// </summary>
     public async Task RouteMessageAsync(Message message, BotContext ctx, CancellationToken ct)
+        => _ = await TryRouteMessageAsync(message, ctx, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Возвращает true, если сообщение было обработано (message-командой или text-командой).
+    /// </summary>
+    public async Task<bool> TryRouteMessageAsync(Message message, BotContext ctx, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
         var text = message.Text;
         if (string.IsNullOrWhiteSpace(text))
-            return;
+            return false;
 
         text = text.Trim();
 
@@ -37,23 +46,22 @@ public sealed class CommandRouter
         {
             var cmd = ExtractSlashCommand(text);
             if (cmd is null)
-                return;
+                return false;
 
-            // сравнение без учёта регистра, чтобы не зависеть от формата ввода
             var handler = _messageCommands.FirstOrDefault(c =>
                 string.Equals(NormalizeSlash(c.Command), cmd, StringComparison.OrdinalIgnoreCase));
 
             if (handler is null)
-                return;
+                return false;
 
             await handler.HandleAsync(message, ctx, ct).ConfigureAwait(false);
-            return;
+            return true;
         }
 
         // 2) Текстовые команды (триггеры)
-        // Здесь выберем "лучшее" совпадение: самый длинный триггер (чтобы "меню настройки" победило "меню").
+        // Выбираем "лучшее" совпадение: самый длинный триггер (чтобы "меню настройки" победило "меню").
         ITextCommand? best = null;
-        int bestLen = -1;
+        var bestLen = -1;
 
         foreach (var cmd in _textCommands)
         {
@@ -75,59 +83,79 @@ public sealed class CommandRouter
         }
 
         if (best is null)
-            return;
+            return false;
 
         await best.HandleAsync(message, ctx, ct).ConfigureAwait(false);
+        return true;
     }
 
+    /// <summary>
+    /// Back-compat: старый метод. Теперь просто вызывает Try-версию.
+    /// </summary>
     public async Task RouteCallbackAsync(CallbackQuery query, BotContext ctx, CancellationToken ct)
+        => _ = await TryRouteCallbackAsync(query, ctx, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Возвращает true, если callback был обработан.
+    /// </summary>
+    public async Task<bool> TryRouteCallbackAsync(CallbackQuery query, BotContext ctx, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
         var data = query.Data;
         if (string.IsNullOrWhiteSpace(data))
-            return;
+            return false;
 
         if (!TryParseCallbackData(data, out var key, out var args))
-            return;
+            return false;
 
         var handler = _callbackCommands.FirstOrDefault(c =>
             string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
 
         if (handler is null)
-            return;
+            return false;
 
         await handler.HandleAsync(query, args, ctx, ct).ConfigureAwait(false);
+        return true;
     }
 
     private static string? ExtractSlashCommand(string text)
     {
-        // "/start@MyBot arg1 arg2" -> "/start"
-        // "/start" -> "/start"
-        // "/start " -> "/start"
-        var firstToken = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(firstToken))
+        // Берём первый "токен" до пробела
+        var first = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[0];
+        if (first.Length < 2 || first[0] != '/')
             return null;
 
-        var at = firstToken.IndexOf('@');
-        if (at > 0)
-            firstToken = firstToken[..at];
+        // /start@MyBot -> /start
+        var at = first.IndexOf('@');
+        if (at >= 0)
+            first = first[..at];
 
-        return NormalizeSlash(firstToken);
+        return first;
     }
 
     private static string NormalizeSlash(string cmd)
     {
+        if (string.IsNullOrWhiteSpace(cmd))
+            return string.Empty;
+
         cmd = cmd.Trim();
-        return cmd.StartsWith('/') ? cmd : "/" + cmd;
+
+        if (cmd[0] != '/')
+            cmd = "/" + cmd;
+
+        var at = cmd.IndexOf('@');
+        if (at >= 0)
+            cmd = cmd[..at];
+
+        return cmd;
     }
 
     private static bool TryParseCallbackData(string data, out string key, out string[] args)
     {
-        // "like 123" -> key="like", args=["123"]
-        // "like" -> key="like", args=[]
+        // Формат: "like 123" или "like:123" — сейчас поддержим только пробелы как ты хотел (key + args)
+        // Если захочешь ":"-формат — легко добавить тут.
         var parts = data.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
         if (parts.Length == 0)
         {
             key = string.Empty;
@@ -136,7 +164,7 @@ public sealed class CommandRouter
         }
 
         key = parts[0];
-        args = parts.Length == 1 ? Array.Empty<string>() : parts.Skip(1).ToArray();
-        return true;
+        args = parts.Length > 1 ? parts.Skip(1).ToArray() : Array.Empty<string>();
+        return !string.IsNullOrWhiteSpace(key);
     }
 }

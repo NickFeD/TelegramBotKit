@@ -1,7 +1,8 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
-using TelegramBotKit;
 using TelegramBotKit.Commands;
+
+namespace TelegramBotKit.Sample.ConsolePolling.Commands;
 
 [Command]
 public sealed class TestCallbackCommand : ICallbackCommand
@@ -10,19 +11,17 @@ public sealed class TestCallbackCommand : ICallbackCommand
 
     public async Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx, CancellationToken ct)
     {
-        // Быстрый ACK, чтобы Telegram не крутил "loading"
         await ctx.BotClient.AnswerCallbackQuery(
             callbackQueryId: query.Id,
-            text: "CallbackQuery получен ✅",
+            text: "Callback работает ✅",
             cancellationToken: ct);
 
-        var chatId = query.Message?.Chat.Id;
-        if (chatId is null)
-            return;
-
-        await ctx.BotClient.SendMessage(
-            chatId: chatId.Value,
-            text: $"Callback test OK. Data = \"{query.Data}\"",
-            cancellationToken: ct);
+        if (query.Message is not null)
+        {
+            await ctx.BotClient.SendMessage(
+                chatId: query.Message.Chat.Id,
+                text: "Я получил CallbackQuery и ответил на него.",
+                cancellationToken: ct);
+        }
     }
 }

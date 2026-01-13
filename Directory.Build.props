@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <Authors>NickFeD</Authors>
+    <Company>NickFeD</Company>
+
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    
+    <!-- Символы (удобно дебажить пользователям) -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="" />
+  </ItemGroup>
+</Project>

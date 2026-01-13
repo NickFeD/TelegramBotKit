@@ -1,7 +1,8 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
-using TelegramBotKit;
 using TelegramBotKit.Commands;
+
+namespace TelegramBotKit.Sample.ConsolePolling.Commands;
 
 [Command]
 public sealed class TestTraceCommand : ICallbackCommand
@@ -10,17 +11,19 @@ public sealed class TestTraceCommand : ICallbackCommand
 
     public async Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx, CancellationToken ct)
     {
-        await ctx.BotClient.AnswerCallbackQuery(query.Id, cancellationToken: ct);
+        var trace = ctx.Items.TryGetValue("traceId", out var v) ? v?.ToString() : "no-trace";
 
-        var chatId = query.Message?.Chat.Id;
-        if (chatId is null)
-            return;
-
-        var traceId = ctx.Items.TryGetValue("traceId", out var v) ? v?.ToString() : "no-trace";
-
-        await ctx.BotClient.SendMessage(
-            chatId: chatId.Value,
-            text: $"Middleware Items test: traceId={traceId}",
+        await ctx.BotClient.AnswerCallbackQuery(
+            callbackQueryId: query.Id,
+            text: "trace отправлю в чат",
             cancellationToken: ct);
+
+        if (query.Message is not null)
+        {
+            await ctx.BotClient.SendMessage(
+                chatId: query.Message.Chat.Id,
+                text: $"traceId из middleware: {trace}",
+                cancellationToken: ct);
+        }
     }
 }
