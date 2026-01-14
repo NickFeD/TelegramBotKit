@@ -5,8 +5,14 @@ using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit;
 
+/// <summary>
+/// Provides a bot context.
+/// </summary>
 public sealed class BotContext
 {
+    /// <summary>
+    /// Initializes a new instance of BotContext.
+    /// </summary>
     public BotContext(
         Update update,
         ITelegramBotClient botClient,
@@ -53,5 +59,8 @@ public sealed class BotContext
     /// </summary>
     public IDictionary<string, object?> Items { get; }
 
+    /// <summary>
+    /// Gets the required service.
+    /// </summary>
     public T GetRequiredService<T>() where T : notnull => Services.GetRequiredService<T>();
 }

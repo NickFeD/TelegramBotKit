@@ -1,5 +1,8 @@
 ﻿namespace TelegramBotKit.Options;
 
+/// <summary>
+/// Specifies telegram bot kit options.
+/// </summary>
 public sealed class TelegramBotKitOptions
 {
     /// <summary>

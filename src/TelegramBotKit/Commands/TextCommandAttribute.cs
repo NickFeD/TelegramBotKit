@@ -1,13 +1,22 @@
 namespace TelegramBotKit.Commands;
 
+/// <summary>
+/// Marks a text command.
+/// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class TextCommandAttribute : Attribute
 {
+    /// <summary>
+    /// Initializes a new instance of TextCommandAttribute.
+    /// </summary>
     public TextCommandAttribute(params string[] triggers)
         : this(ignoreCase: true, triggers)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of TextCommandAttribute.
+    /// </summary>
     public TextCommandAttribute(bool ignoreCase, params string[] triggers)
     {
         if (triggers is null || triggers.Length == 0)

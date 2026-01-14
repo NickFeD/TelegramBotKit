@@ -2,6 +2,9 @@
 
 namespace TelegramBotKit.Middleware;
 
+/// <summary>
+/// Provides a bot context delegate.
+/// </summary>
 public delegate Task BotContextDelegate(BotContext ctx);
 
 internal sealed class MiddlewarePipeline

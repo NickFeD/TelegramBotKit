@@ -4,6 +4,9 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
+/// <summary>
+/// Provides a send text.
+/// </summary>
 public sealed record SendText
 {
     /// <summary>

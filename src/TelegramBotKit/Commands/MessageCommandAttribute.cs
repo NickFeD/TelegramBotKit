@@ -1,8 +1,14 @@
 namespace TelegramBotKit.Commands;
 
+/// <summary>
+/// Marks a message command.
+/// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class MessageCommandAttribute : Attribute
 {
+    /// <summary>
+    /// Initializes a new instance of MessageCommandAttribute.
+    /// </summary>
     public MessageCommandAttribute(string command)
     {
         if (string.IsNullOrWhiteSpace(command))

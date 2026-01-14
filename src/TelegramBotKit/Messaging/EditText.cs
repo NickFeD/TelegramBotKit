@@ -4,6 +4,9 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
+/// <summary>
+/// Provides an edit text.
+/// </summary>
 public sealed record EditText
 {
     /// <summary>

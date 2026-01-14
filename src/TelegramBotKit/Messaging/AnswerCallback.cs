@@ -1,5 +1,8 @@
 ﻿namespace TelegramBotKit.Messaging;
 
+/// <summary>
+/// Provides an answer callback.
+/// </summary>
 public sealed record AnswerCallback
 {
     /// <summary>

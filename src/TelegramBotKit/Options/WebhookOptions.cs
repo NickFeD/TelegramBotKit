@@ -2,6 +2,9 @@
 
 namespace TelegramBotKit.Options;
 
+/// <summary>
+/// Specifies webhook options.
+/// </summary>
 public sealed class WebhookOptions
 {
     /// <summary>

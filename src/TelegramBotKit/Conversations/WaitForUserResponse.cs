@@ -4,10 +4,16 @@ using Telegram.Bot.Types;
 
 namespace TelegramBotKit.Conversations;
 
+/// <summary>
+/// Provides a wait for user response.
+/// </summary>
 public sealed class WaitForUserResponse
 {
     private readonly ConcurrentDictionary<WaitKey, Channel<Message>> _waiters = new();
 
+    /// <summary>
+    /// Executes the wait asynchronously.
+    /// </summary>
     public async Task<Message?> WaitAsync(
         long chatId,
         long userId,
@@ -48,6 +54,9 @@ public sealed class WaitForUserResponse
         }
     }
 
+    /// <summary>
+    /// Tries to publish.
+    /// </summary>
     public bool TryPublish(Message message)
     {
         if (message is null) return false;

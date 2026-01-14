@@ -19,8 +19,14 @@ using TelegramBotKit.Routing;
 namespace TelegramBotKit.DependencyInjection;
 
 
+/// <summary>
+/// Provides a telegram bot kit service collection extensions.
+/// </summary>
 public static class TelegramBotKitServiceCollectionExtensions
 {
+    /// <summary>
+    /// Adds the telegram bot kit.
+    /// </summary>
     public static TelegramBotKitBuilder AddTelegramBotKit(
         this IServiceCollection services,
         Action<TelegramBotKitOptions> configure)
@@ -78,6 +84,9 @@ public static class TelegramBotKitServiceCollectionExtensions
     }
 
 
+    /// <summary>
+    /// Adds the update handler.
+    /// </summary>
     public static IServiceCollection AddUpdateHandler<TPayload, THandler>(
         this IServiceCollection services,
         ServiceLifetime lifetime = ServiceLifetime.Scoped)
@@ -91,6 +100,9 @@ public static class TelegramBotKitServiceCollectionExtensions
     }
 
 
+/// <summary>
+/// Adds the telegram bot kit queued message sender.
+/// </summary>
 public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     this IServiceCollection services,
     Action<QueuedMessageSenderOptions>? configure = null)
@@ -140,10 +152,16 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     }
 
 
+    /// <summary>
+    /// Adds the command.
+    /// </summary>
     public static IServiceCollection AddCommand<TCommand>(this IServiceCollection services, ServiceLifetime lifetime = ServiceLifetime.Transient)
         where TCommand : class, ICommand
         => services.AddCommand(typeof(TCommand), lifetime);
 
+    /// <summary>
+    /// Adds the command.
+    /// </summary>
     public static IServiceCollection AddCommand(this IServiceCollection services, Type commandType, ServiceLifetime lifetime = ServiceLifetime.Transient)
     {
         if (services is null) throw new ArgumentNullException(nameof(services));
@@ -202,6 +220,9 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         return services;
     }
 
+    /// <summary>
+    /// Adds the commands from assemblies.
+    /// </summary>
     public static IServiceCollection AddCommandsFromAssemblies(this IServiceCollection services, params Assembly[] assemblies)
     {
         if (services is null) throw new ArgumentNullException(nameof(services));

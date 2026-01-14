@@ -3,22 +3,40 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Keyboards;
 
+/// <summary>
+/// Provides a keyboard.
+/// </summary>
 public static class Keyboard
 {
     private const int MaxCallbackDataBytes = 64;
 
+    /// <summary>
+    /// Creates the callback button.
+    /// </summary>
     public static InlineKeyboardButton Callback(string text, string key, params string[] args)
         => InlineKeyboardButton.WithCallbackData(text, PackCallbackData(key, args));
 
+    /// <summary>
+    /// Creates the callback raw button.
+    /// </summary>
     public static InlineKeyboardButton CallbackRaw(string text, string data)
         => InlineKeyboardButton.WithCallbackData(text, ValidateCallbackData(data));
 
+    /// <summary>
+    /// Creates the url button.
+    /// </summary>
     public static InlineKeyboardButton Url(string text, string url)
         => InlineKeyboardButton.WithUrl(text, url);
 
+    /// <summary>
+    /// Creates the switch inline button.
+    /// </summary>
     public static InlineKeyboardButton SwitchInline(string text, string query)
         => InlineKeyboardButton.WithSwitchInlineQueryCurrentChat(text, query);
 
+    /// <summary>
+    /// Creates the inline button.
+    /// </summary>
     public static InlineKeyboardMarkup Inline(IEnumerable<IEnumerable<InlineKeyboardButton>> rows)
     {
         if (rows is null) throw new ArgumentNullException(nameof(rows));
@@ -33,6 +51,9 @@ public static class Keyboard
         return new InlineKeyboardMarkup(materialized);
     }
 
+    /// <summary>
+    /// Creates the row.
+    /// </summary>
     public static IReadOnlyList<InlineKeyboardButton> Row(params InlineKeyboardButton[] buttons)
         => buttons ?? Array.Empty<InlineKeyboardButton>();
 

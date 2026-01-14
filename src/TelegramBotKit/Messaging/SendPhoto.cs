@@ -4,6 +4,9 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
+/// <summary>
+/// Provides a send photo.
+/// </summary>
 public sealed record SendPhoto
 {
     /// <summary>

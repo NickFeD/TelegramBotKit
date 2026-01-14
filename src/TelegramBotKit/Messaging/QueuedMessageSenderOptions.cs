@@ -1,5 +1,8 @@
 namespace TelegramBotKit.Messaging;
 
+/// <summary>
+/// Specifies queued message sender options.
+/// </summary>
 public sealed class QueuedMessageSenderOptions
 {
     /// <summary>

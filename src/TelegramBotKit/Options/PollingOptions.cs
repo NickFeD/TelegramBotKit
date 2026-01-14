@@ -2,6 +2,9 @@
 
 namespace TelegramBotKit.Options;
 
+/// <summary>
+/// Specifies polling options.
+/// </summary>
 public sealed class PollingOptions
 {
     /// <summary>
