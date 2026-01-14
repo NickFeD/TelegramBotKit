@@ -4,17 +4,10 @@ using Telegram.Bot.Types;
 
 namespace TelegramBotKit.Conversations;
 
-/// <summary>
-/// Простое ожидание следующего сообщения от конкретного пользователя в конкретном чате.
-/// Хранит ожидания в памяти (не переживает рестарт процесса).
-/// </summary>
 public sealed class WaitForUserResponse
 {
     private readonly ConcurrentDictionary<WaitKey, Channel<Message>> _waiters = new();
 
-    /// <summary>
-    /// Ждёт следующее сообщение от (chatId, userId). Возвращает null по таймауту/отмене.
-    /// </summary>
     public async Task<Message?> WaitAsync(
         long chatId,
         long userId,
@@ -55,10 +48,6 @@ public sealed class WaitForUserResponse
         }
     }
 
-    /// <summary>
-    /// Пытается доставить сообщение в активное ожидание.
-    /// Возвращает true, если сообщение было "съедено" ожиданием.
-    /// </summary>
     public bool TryPublish(Message message)
     {
         if (message is null) return false;
@@ -74,7 +63,6 @@ public sealed class WaitForUserResponse
         if (!_waiters.TryGetValue(key, out var channel))
             return false;
 
-        // Если удалось записать — сразу убираем waiter, чтобы не было двойной доставки
         if (channel.Writer.TryWrite(message))
         {
             _waiters.TryRemove(key, out _);

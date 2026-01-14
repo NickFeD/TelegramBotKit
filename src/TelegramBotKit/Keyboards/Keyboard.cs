@@ -3,41 +3,22 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Keyboards;
 
-/// <summary>
-/// Простые хелперы для сборки клавиатур без "билдеров".
-/// </summary>
 public static class Keyboard
 {
-    // Telegram ограничивает callback_data 1..64 bytes (UTF-8).
     private const int MaxCallbackDataBytes = 64;
 
-    /// <summary>
-    /// Inline-кнопка callback: "key arg1 arg2".
-    /// </summary>
     public static InlineKeyboardButton Callback(string text, string key, params string[] args)
         => InlineKeyboardButton.WithCallbackData(text, PackCallbackData(key, args));
 
-    /// <summary>
-    /// Inline-кнопка callback с уже готовой callback_data.
-    /// </summary>
     public static InlineKeyboardButton CallbackRaw(string text, string data)
         => InlineKeyboardButton.WithCallbackData(text, ValidateCallbackData(data));
 
-    /// <summary>
-    /// Inline-кнопка URL.
-    /// </summary>
     public static InlineKeyboardButton Url(string text, string url)
         => InlineKeyboardButton.WithUrl(text, url);
 
-    /// <summary>
-    /// Inline-кнопка "Switch inline query current chat".
-    /// </summary>
     public static InlineKeyboardButton SwitchInline(string text, string query)
         => InlineKeyboardButton.WithSwitchInlineQueryCurrentChat(text, query);
 
-    /// <summary>
-    /// Собирает InlineKeyboardMarkup из строк (rows) и кнопок.
-    /// </summary>
     public static InlineKeyboardMarkup Inline(IEnumerable<IEnumerable<InlineKeyboardButton>> rows)
     {
         if (rows is null) throw new ArgumentNullException(nameof(rows));
@@ -52,9 +33,6 @@ public static class Keyboard
         return new InlineKeyboardMarkup(materialized);
     }
 
-    /// <summary>
-    /// Хелпер для строки кнопок
-    /// </summary>
     public static IReadOnlyList<InlineKeyboardButton> Row(params InlineKeyboardButton[] buttons)
         => buttons ?? Array.Empty<InlineKeyboardButton>();
 
@@ -69,7 +47,6 @@ public static class Keyboard
         if (args is null || args.Length == 0)
             return ValidateCallbackData(key);
 
-        // Формат: "key arg1 arg2"
         var sb = new StringBuilder(key);
 
         foreach (var a in args)

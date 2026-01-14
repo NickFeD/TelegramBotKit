@@ -3,10 +3,6 @@ using TelegramBotKit.Middleware;
 
 namespace TelegramBotKit.Sample.ConsolePolling;
 
-/// <summary>
-/// Пример глобального middleware: логирование + traceId в ctx.Items.
-/// ВАЖНО: middleware создаётся один раз и используется многопоточно.
-/// </summary>
 public sealed class TraceLoggingMiddleware : IUpdateMiddleware
 {
     private readonly ILogger _log;

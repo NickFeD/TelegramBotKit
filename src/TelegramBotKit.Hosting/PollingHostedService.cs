@@ -75,18 +75,11 @@ internal sealed class PollingHostedService : BackgroundService
 
             foreach (var upd in updates)
             {
-                // ВАЖНО: offset двигаем сразу, чтобы не получать один и тот же update снова.
                 offset = upd.Id + 1;
 
-                // Fast-path: если это ответ ожидающему пользователю — "скармливаем" ожиданию
-                // и НЕ отправляем в обычную обработку (чтобы команды не мешали диалогу).
                 if (upd.Message is not null && _wait.TryPublish(upd.Message))
                     continue;
 
-                // Actor-per-chat/user dispatch:
-                // - Message-like updates are ordered by ChatId
-                // - Inline flows are ordered by UserId
-                // - CallbackQuery is processed without ordering (buttons)
                 await _scheduler.EnqueueAsync(upd, stoppingToken).ConfigureAwait(false);
             }
         }

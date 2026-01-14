@@ -5,23 +5,22 @@ namespace TelegramBotKit.Options;
 public sealed class PollingOptions
 {
     /// <summary>
-    /// Максимальная параллельность обработки апдейтов.
-    /// 0 или меньше = без лимитов (как было в MVP).
+    /// Gets or sets the maximum degree of parallelism.
     /// </summary>
     public int MaxDegreeOfParallelism { get; set; } = 0;
 
     /// <summary>
-    /// GetUpdates limit (1..100). Обычно 100.
+    /// Gets or sets the update limit.
     /// </summary>
     public int Limit { get; set; } = 100;
 
     /// <summary>
-    /// GetUpdates timeout (секунды). Обычно 10.
+    /// Gets or sets the polling timeout in seconds.
     /// </summary>
     public int TimeoutSeconds { get; set; } = 10;
 
     /// <summary>
-    /// Какие типы апдейтов принимать. Пустой массив означает "все" (дефолт Telegram).
+    /// Gets or sets the allowed update types.
     /// </summary>
     public UpdateType[] AllowedUpdates { get; set; } = Array.Empty<UpdateType>();
 }

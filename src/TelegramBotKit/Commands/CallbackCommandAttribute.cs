@@ -1,8 +1,5 @@
 namespace TelegramBotKit.Commands;
 
-/// <summary>
-/// Метаданные для callback-команды. Key — первый токен в callback_data.
-/// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class CallbackCommandAttribute : Attribute
 {
@@ -14,5 +11,8 @@ public sealed class CallbackCommandAttribute : Attribute
         Key = key;
     }
 
+    /// <summary>
+    /// Gets the key.
+    /// </summary>
     public string Key { get; }
 }

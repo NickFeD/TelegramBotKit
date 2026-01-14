@@ -1,16 +1,19 @@
 ﻿namespace TelegramBotKit.Messaging;
 
-/// <summary>
-/// DTO для AnswerCallbackQuery.
-/// </summary>
 public sealed record AnswerCallback
 {
-    /// <summary>Текст всплывашки (null — без текста).</summary>
+    /// <summary>
+    /// Gets or sets the text.
+    /// </summary>
     public string? Text { get; init; }
 
-    /// <summary>Показать alert вместо toast.</summary>
+    /// <summary>
+    /// Gets or sets a value indicating whether show alert is enabled.
+    /// </summary>
     public bool ShowAlert { get; init; } = false;
 
-    /// <summary>URL для открытия (редко нужно).</summary>
+    /// <summary>
+    /// Gets or sets the url.
+    /// </summary>
     public string? Url { get; init; }
 }

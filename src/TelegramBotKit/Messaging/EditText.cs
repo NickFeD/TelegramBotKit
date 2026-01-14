@@ -4,23 +4,30 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
-/// <summary>
-/// DTO для редактирования текста сообщения.
-/// </summary>
 public sealed record EditText
 {
-    /// <summary>Новый текст.</summary>
+    /// <summary>
+    /// Gets or sets the text.
+    /// </summary>
     public required string Text { get; init; }
 
-    /// <summary>Режим разметки (Html/Markdown/None).</summary>
+    /// <summary>
+    /// Gets or sets the parse mode.
+    /// </summary>
     public ParseMode ParseMode { get; init; } = ParseMode.None;
 
-    /// <summary>Настройки предпросмотра ссылок.</summary>
+    /// <summary>
+    /// Gets or sets the link preview options.
+    /// </summary>
     public LinkPreviewOptions? LinkPreviewOptions { get; init; }
 
-    /// <summary>Сущности текста (если ты сам формируешь entities).</summary>
+    /// <summary>
+    /// Gets or sets the message entities.
+    /// </summary>
     public IEnumerable<MessageEntity>? Entities { get; init; }
 
-    /// <summary>Inline клавиатура (для edit обычно актуальна именно Inline).</summary>
+    /// <summary>
+    /// Gets or sets the reply markup.
+    /// </summary>
     public InlineKeyboardMarkup? ReplyMarkup { get; init; }
 }

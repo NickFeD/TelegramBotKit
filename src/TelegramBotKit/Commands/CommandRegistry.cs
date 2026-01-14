@@ -1,9 +1,5 @@
 namespace TelegramBotKit.Commands;
 
-/// <summary>
-/// Индекс команд, построенный из зарегистрированных дескрипторов.
-/// Позволяет находить команду без создания всех command-объектов на каждый update.
-/// </summary>
 internal sealed class CommandRegistry
 {
     private readonly IReadOnlyDictionary<string, Type> _messageBySlash;
@@ -39,11 +35,6 @@ internal sealed class CommandRegistry
         _messageBySlash = msg;
         _callbackByKey = cb;
 
-        // Текстовые команды: делаем O(1) lookup вместо перебора всех триггеров.
-        // Поддерживаем два режима:
-        // - case-sensitive (Ordinal)
-        // - ignoreCase (OrdinalIgnoreCase)
-        // Приоритет: сначала точное Ordinal совпадение, затем ignoreCase.
         var textExact = new Dictionary<string, Type>(StringComparer.Ordinal);
         var textIgnore = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
 
@@ -68,8 +59,6 @@ internal sealed class CommandRegistry
             }
         }
 
-        // Не допускаем одинаковый триггер одновременно в case-sensitive и ignoreCase,
-        // иначе поведение становится неочевидным.
         foreach (var kv in textExact)
         {
             if (textIgnore.ContainsKey(kv.Key))

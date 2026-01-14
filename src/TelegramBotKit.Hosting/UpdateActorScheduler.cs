@@ -9,15 +9,6 @@ using TelegramBotKit.Options;
 
 namespace TelegramBotKit.Hosting;
 
-/// <summary>
-/// Actor-per-chat/user scheduler.
-/// Гарантирует последовательную обработку update'ов для одного ключа (чат или пользователь),
-/// при этом допускает параллельность между разными ключами.
-///
-/// Важно:
-/// - Для CallbackQuery порядок обычно не критичен (кнопки), поэтому они обрабатываются без actor-очереди.
-/// - Глобальный лимит параллелизма берётся из Polling.MaxDegreeOfParallelism.
-/// </summary>
 internal sealed class UpdateActorScheduler : IDisposable
 {
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(5);
@@ -44,17 +35,12 @@ internal sealed class UpdateActorScheduler : IDisposable
         _cleanup = new Timer(_ => Cleanup(), null, CleanupPeriod, CleanupPeriod);
     }
 
-    /// <summary>
-    /// Поставить update в обработку.
-    /// Для акторных ключей гарантируется порядок (FIFO).
-    /// </summary>
     public ValueTask EnqueueAsync(Update update, CancellationToken ct)
     {
         if (update is null) throw new ArgumentNullException(nameof(update));
 
         var key = TryGetActorKey(update);
 
-        // CallbackQuery не требует строгого порядка — обрабатываем без actor-очереди.
         if (key is null)
         {
             _ = ProcessUnkeyedAsync(update, ct);
@@ -73,7 +59,6 @@ internal sealed class UpdateActorScheduler : IDisposable
         }
         catch (OperationCanceledException)
         {
-            // ignore
         }
         catch (Exception ex)
         {
@@ -111,7 +96,6 @@ internal sealed class UpdateActorScheduler : IDisposable
             if (now - actor.LastActivityUtc < IdleTimeout)
                 continue;
 
-            // Remove only if still the same instance.
             if (_actors.TryRemove(kv.Key, out var removed) && ReferenceEquals(removed, actor))
             {
                 removed.Complete();
@@ -131,43 +115,34 @@ internal sealed class UpdateActorScheduler : IDisposable
 
     private static ActorKey? TryGetActorKey(Update upd)
     {
-        // 1) Message-like updates -> Chat
         var msg = upd.Message ?? upd.EditedMessage ?? upd.ChannelPost ?? upd.EditedChannelPost;
         if (msg is not null)
             return new ActorKey(ActorKeyKind.Chat, msg.Chat.Id);
 
-        // 2) CallbackQuery -> no actor ordering (buttons)
         if (upd.CallbackQuery is not null)
             return null;
 
-        // 3) Inline flows -> User
         if (upd.InlineQuery is not null)
             return new ActorKey(ActorKeyKind.User, upd.InlineQuery.From.Id);
 
         if (upd.ChosenInlineResult is not null)
             return new ActorKey(ActorKeyKind.User, upd.ChosenInlineResult.From.Id);
 
-        // 4) Chat member events -> Chat
         if (upd.MyChatMember is not null)
             return new ActorKey(ActorKeyKind.Chat, upd.MyChatMember.Chat.Id);
 
         if (upd.ChatMember is not null)
             return new ActorKey(ActorKeyKind.Chat, upd.ChatMember.Chat.Id);
 
-        // 5) Join request -> Chat
         if (upd.ChatJoinRequest is not null)
             return new ActorKey(ActorKeyKind.Chat, upd.ChatJoinRequest.Chat.Id);
 
-        // 6) PollAnswer -> User
         if (upd.PollAnswer is not null)
             return new ActorKey(ActorKeyKind.User, upd.PollAnswer.User.Id);
 
-        // Poll does not have chat/user; process as unkeyed.
         if (upd.Poll is not null)
             return null;
 
-        // Fallback: если в update есть пользователь — последовательно по пользователю.
-        // (Держим только поля, которые гарантированно есть в Telegram.Bot 22.*)
         var userId = upd.PreCheckoutQuery?.From?.Id
             ?? upd.ShippingQuery?.From?.Id;
 
@@ -211,6 +186,9 @@ internal sealed class UpdateActorScheduler : IDisposable
             _ = Task.Run(RunAsync, CancellationToken.None);
         }
 
+        /// <summary>
+        /// Gets the pending count.
+        /// </summary>
         public int PendingCount => Volatile.Read(ref _pending);
 
         public DateTime LastActivityUtc
@@ -227,7 +205,6 @@ internal sealed class UpdateActorScheduler : IDisposable
             Interlocked.Increment(ref _pending);
             Touch();
 
-            // Если write будет отменён/упадёт — откатываем pending.
             return WriteAsync(new UpdateWorkItem(upd, ct));
 
             async ValueTask WriteAsync(UpdateWorkItem item)
@@ -260,7 +237,6 @@ internal sealed class UpdateActorScheduler : IDisposable
                 }
                 catch (OperationCanceledException)
                 {
-                    // ignore
                 }
                 catch (Exception ex)
                 {

@@ -18,12 +18,12 @@ public sealed class TelegramBotKitBuilder
     internal IReadOnlyList<Action<UpdateHandlerRegistry>> RegistryActions => _registryActions;
     internal TelegramBotKitBuilder(IServiceCollection services) => Services = services;
 
+    /// <summary>
+    /// Gets the service provider.
+    /// </summary>
     public IServiceCollection Services { get; }
 
 
-    /// <summary>
-    /// Добавить middleware-класс в пайплайн.
-    /// </summary>
     public TelegramBotKitBuilder UseMiddleware<TMiddleware>()
         where TMiddleware : class, IUpdateMiddleware
     {
@@ -50,10 +50,6 @@ public sealed class TelegramBotKitBuilder
         return this;
     }
 
-    /// <summary>
-    /// Удобная регистрация обработчика payload-типа.
-    /// Эквивалент Services.AddUpdateHandler&lt;TPayload, THandler&gt;(...).
-    /// </summary>
     public TelegramBotKitBuilder AddUpdateHandler<TPayload, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TPayload : class
         where THandler : class, IUpdatePayloadHandler<TPayload>
@@ -62,15 +58,7 @@ public sealed class TelegramBotKitBuilder
         return this;
     }
 
-    /// <summary>
-    /// Дополнительно замаппить UpdateType на payload.
-    /// Дополнительно замаппить UpdateType на payload (редко нужно, т.к. большинство типов маппятся по соглашению).
-    /// </summary>
 
-    /// <summary>
-    /// Включить очередной IMessageSender (Channel + retry-after + throttling).
-    /// По умолчанию sender без очереди.
-    /// </summary>
     public TelegramBotKitBuilder UseQueuedMessageSender(Action<QueuedMessageSenderOptions>? configure = null)
     {
         Services.AddTelegramBotKitQueuedMessageSender(configure);

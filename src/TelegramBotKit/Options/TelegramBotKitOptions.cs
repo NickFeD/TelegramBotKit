@@ -3,12 +3,12 @@
 public sealed class TelegramBotKitOptions
 {
     /// <summary>
-    /// Токен бота (обязателен).
+    /// Gets or sets the bot token.
     /// </summary>
     public string Token { get; set; } = string.Empty;
 
     /// <summary>
-    /// Настройки polling (GetUpdates).
+    /// Gets or sets the polling options.
     /// </summary>
     public PollingOptions Polling { get; set; } = new();
 }

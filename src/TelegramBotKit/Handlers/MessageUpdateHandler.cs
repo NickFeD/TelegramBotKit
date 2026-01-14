@@ -6,9 +6,6 @@ using TelegramBotKit.Routing;
 
 namespace TelegramBotKit.Handlers;
 
-/// <summary>
-/// Обрабатывает UpdateType.Message (payload Message) и маршрутизирует в команды.
-/// </summary>
 internal sealed class MessageUpdateHandler : IUpdatePayloadHandler<Message>
 {
     private readonly CommandRouter _router;
@@ -29,16 +26,13 @@ internal sealed class MessageUpdateHandler : IUpdatePayloadHandler<Message>
     {
         ctx.CancellationToken.ThrowIfCancellationRequested();
 
-        // 1) Сначала пробуем доставить в ожидание ответа (если оно включено на чат/пользователя)
         if (_wait.TryPublish(payload))
             return;
 
-        // 2) Пытаемся сматчить команды
         var handled = await _router.TryRouteMessageAsync(payload, ctx).ConfigureAwait(false);
         if (handled)
             return;
 
-        // 3) Иначе — default
         await _defaultMessage.HandleAsync(payload, ctx).ConfigureAwait(false);
     }
 }

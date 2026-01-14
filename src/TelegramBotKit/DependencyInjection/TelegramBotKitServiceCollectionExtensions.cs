@@ -18,7 +18,6 @@ using TelegramBotKit.Routing;
 
 namespace TelegramBotKit.DependencyInjection;
 
-// ------------------- Extensions -------------------
 
 public static class TelegramBotKitServiceCollectionExtensions
 {
@@ -34,7 +33,6 @@ public static class TelegramBotKitServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<TelegramBotKitOptions>, TelegramBotKitOptionsValidator>();
 
-        // Telegram client (Telegram.Bot v22.*)
         services.AddSingleton<ITelegramBotClient>(sp =>
         {
             var opt = sp.GetRequiredService<IOptions<TelegramBotKitOptions>>().Value;
@@ -42,43 +40,31 @@ public static class TelegramBotKitServiceCollectionExtensions
             return new TelegramBotClient(clientOptions);
         });
 
-        // Sender (по умолчанию без очереди)
         services.TryAddSingleton<MessageSender>();
         services.TryAddSingleton<IMessageSender>(sp => sp.GetRequiredService<MessageSender>());
 
-        // Conversations
         services.AddSingleton<WaitForUserResponse>();
 
-        // Routing
         services.AddScoped<CommandRouter>();
         services.TryAddSingleton<CommandRegistry>();
 
-        // Update payload handlers (scope-per-update)
         services.AddScoped<IUpdatePayloadHandler<Message>, MessageUpdateHandler>();
         services.AddScoped<IUpdatePayloadHandler<CallbackQuery>, CallbackQueryUpdateHandler>();
 
-        // Default handlers (noop by default)
         services.TryAddSingleton<IDefaultUpdateHandler, NoopDefaultUpdateHandler>();
         services.TryAddSingleton<IDefaultMessageHandler, NoopDefaultMessageHandler>();
         services.TryAddSingleton<IDefaultCallbackHandler, NoopDefaultCallbackHandler>();
 
         var builder = new TelegramBotKitBuilder(services);
 
-        // Pipeline
         services.AddSingleton(sp => new MiddlewarePipeline(sp, builder.MiddlewareTypes));
 
-        // Registry + default mappings
         services.AddSingleton<UpdateHandlerRegistry>(sp =>
         {
             var reg = new UpdateHandlerRegistry();
 
-            // По умолчанию маппим *все* UpdateType по соглашению:
-            // если в Telegram.Bot.Types.Update есть property с таким же именем, как enum UpdateType,
-            // то делаем Map(UpdateType.X, u => u.X).
-            // Это даёт «из коробки» поддержку новых типов без маркерных интерфейсов.
             MapUpdatePayloadsByConvention(reg);
 
-            // Маппинги, добавленные через builder.Map(...)
             foreach (var add in builder.RegistryActions)
                 add(reg);
 
@@ -88,20 +74,10 @@ public static class TelegramBotKitServiceCollectionExtensions
 
         services.AddSingleton<IUpdateDispatcher, UpdateRouter>();
 
-        // IMPORTANT: return the same builder instance.
-        // Otherwise middleware/commands added by the caller after AddTelegramBotKit(...)
-        // would be added to a different builder and never make it into the pipeline.
         return builder;
     }
 
-    // ------------------- Update handler registration -------------------
 
-    /// <summary>
-    /// Удобная регистрация обработчика payload-типа.
-    ///
-    /// ВАЖНО: регистрируй именно как IUpdatePayloadHandler&lt;TPayload&gt;,
-    /// иначе стандартный DI не сможет найти обработчик по generic-интерфейсу.
-    /// </summary>
     public static IServiceCollection AddUpdateHandler<TPayload, THandler>(
         this IServiceCollection services,
         ServiceLifetime lifetime = ServiceLifetime.Scoped)
@@ -115,12 +91,6 @@ public static class TelegramBotKitServiceCollectionExtensions
     }
 
 
-// ------------------- Message sender decorators -------------------
-
-/// <summary>
-/// Включить очередной sender с троттлингом и ретраями (защита от 429/5xx).
-/// По умолчанию AddTelegramBotKit регистрирует простой MessageSender без очереди.
-/// </summary>
 public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     this IServiceCollection services,
     Action<QueuedMessageSenderOptions>? configure = null)
@@ -131,13 +101,10 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     if (configure is not null)
         opt.Configure(configure);
 
-    // Базовый sender (внутренний)
     services.TryAddSingleton<MessageSender>();
 
-    // Декоратор
     services.TryAddSingleton<QueuedMessageSender>();
 
-    // IMessageSender -> QueuedMessageSender
     services.Replace(ServiceDescriptor.Singleton<IMessageSender>(sp => sp.GetRequiredService<QueuedMessageSender>()));
 
     return services;
@@ -145,7 +112,6 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
 
     private static void MapUpdatePayloadsByConvention(UpdateHandlerRegistry reg)
     {
-        // Ищем UpdateHandlerRegistry.Map<TPayload>(UpdateType, Func<Update, TPayload?>)
         var mapGeneric = typeof(UpdateHandlerRegistry)
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
             .Where(m => m.Name == nameof(UpdateHandlerRegistry.Map))
@@ -157,26 +123,22 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         {
             var name = updateType.ToString();
 
-            // Ищем property на Update с таким же именем (Message, CallbackQuery, InlineQuery, ...)
             var prop = typeof(Update).GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
             if (prop is null) continue;
 
             var payloadType = prop.PropertyType;
-            if (!payloadType.IsClass) continue; // Map работает только для reference types
+            if (!payloadType.IsClass) continue;
 
-            // Компилируем extractor: (Update u) => u.<Prop>
             var u = Expression.Parameter(typeof(Update), "u");
             var body = Expression.Property(u, prop);
             var funcType = typeof(Func<,>).MakeGenericType(typeof(Update), payloadType);
             var extractor = Expression.Lambda(funcType, body, u).Compile();
 
-            // Вызываем Map<TPayload>(updateType, extractor) через reflection
             var closedMap = mapGeneric.MakeGenericMethod(payloadType);
             closedMap.Invoke(reg, new object[] { updateType, extractor });
         }
     }
 
-    // ------------------- Command registration -------------------
 
     public static IServiceCollection AddCommand<TCommand>(this IServiceCollection services, ServiceLifetime lifetime = ServiceLifetime.Transient)
         where TCommand : class, ICommand
@@ -193,7 +155,6 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         if (commandType.IsAbstract || commandType.IsInterface)
             throw new ArgumentException($"{commandType.Name} must be a concrete class.", nameof(commandType));
 
-        // Регистрируем конкретный тип (инстанс будет создаваться только когда команда реально выбрана)
         services.Add(new ServiceDescriptor(commandType, commandType, lifetime));
 
         var hasAnyRoleAttr = false;
@@ -228,8 +189,6 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
             services.AddSingleton(new CallbackCommandDescriptor(cbAttr.Key, commandType));
         }
 
-        // Если класс реализует command-интерфейсы, но атрибутов нет — мы не можем построить индекс.
-        // Это сделано специально: команда больше НЕ создаётся на каждый update.
         if (!hasAnyRoleAttr)
         {
             var hasInterfaces = typeof(IMessageCommand).IsAssignableFrom(commandType)

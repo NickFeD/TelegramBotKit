@@ -5,9 +5,6 @@ using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit;
 
-/// <summary>
-/// Контекст обработки одного апдейта
-/// </summary>
 public sealed class BotContext
 {
     public BotContext(
@@ -26,33 +23,33 @@ public sealed class BotContext
     }
 
     /// <summary>
-    /// Сырой апдейт от Telegram (в нём может быть Message, CallbackQuery и т.д.)
+    /// Gets the incoming update.
     /// </summary>
     public Update Update { get; }
 
 
     /// <summary>
-    /// Высокоуровневый sender (может быть с очередью/ретраями).
+    /// Gets the message sender.
     /// </summary>
     public IMessageSender Sender { get; }
 
     /// <summary>
-    /// Клиент Telegram (низкоуровневый).
+    /// Gets the Telegram bot client.
     /// </summary>
     public ITelegramBotClient BotClient { get; }
 
     /// <summary>
-    /// DI scope provider для обработки данного апдейта.
+    /// Gets the service provider.
     /// </summary>
     public IServiceProvider Services { get; }
 
     /// <summary>
-    /// Токен отмены (остановка приложения/таймауты).
+    /// Gets the cancellation token.
     /// </summary>
     public CancellationToken CancellationToken { get; }
 
     /// <summary>
-    /// Карман для обмена данными между middleware/обработчиками.
+    /// Gets the context items.
     /// </summary>
     public IDictionary<string, object?> Items { get; }
 

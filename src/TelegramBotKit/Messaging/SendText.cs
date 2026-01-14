@@ -4,31 +4,40 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
-/// <summary>
-/// DTO для отправки текстового сообщения. Можно переиспользовать как шаблон:
-/// var tpl = new SendText { ParseMode = ParseMode.Html, LinkPreviewOptions = new(false) };
-/// await sender.SendText(chatId, tpl with { Text = "Hello" }, ct);
-/// </summary>
 public sealed record SendText
 {
-    /// <summary>Текст сообщения.</summary>
+    /// <summary>
+    /// Gets or sets the text.
+    /// </summary>
     public required string Text { get; init; }
 
-    /// <summary>Режим разметки (Html/Markdown/None).</summary>
+    /// <summary>
+    /// Gets or sets the parse mode.
+    /// </summary>
     public ParseMode ParseMode { get; init; } = ParseMode.None;
 
-    /// <summary>Настройки предпросмотра ссылок (в v21+ заменяет disableWebPagePreview).</summary>
+    /// <summary>
+    /// Gets or sets the link preview options.
+    /// </summary>
     public LinkPreviewOptions? LinkPreviewOptions { get; init; }
 
-    /// <summary>Сущности текста (если ты сам формируешь entities).</summary>
+    /// <summary>
+    /// Gets or sets the message entities.
+    /// </summary>
     public IEnumerable<MessageEntity>? Entities { get; init; }
 
-    /// <summary>Клавиатура (Inline/Reply/RemoveKeyboard/ForceReply).</summary>
+    /// <summary>
+    /// Gets or sets the reply markup.
+    /// </summary>
     public ReplyMarkup? ReplyMarkup { get; init; }
 
-    /// <summary>Отключить уведомление (тихая отправка).</summary>
+    /// <summary>
+    /// Gets or sets a value indicating whether notifications are disabled.
+    /// </summary>
     public bool DisableNotification { get; init; } = false;
 
-    /// <summary>Защитить контент (нельзя пересылать/сохранять).</summary>
+    /// <summary>
+    /// Gets or sets a value indicating whether content is protected.
+    /// </summary>
     public bool ProtectContent { get; init; } = false;
 }

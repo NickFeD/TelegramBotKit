@@ -8,13 +8,6 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
-/// <summary>
-/// Декоратор IMessageSender:
-/// - ставит все отправки в очередь (Channel)
-/// - защищает от 429 (retry_after)
-/// - экспоненциальный backoff на 5xx/сетевые ошибки
-/// - троттлинг по чату + глобальный (сообщений/сек)
-/// </summary>
 internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
 {
     private readonly MessageSender _inner;
@@ -76,7 +69,7 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         => EnqueueNoChat(async t =>
         {
             await _inner.AnswerCallback(callbackQueryId, answer, t).ConfigureAwait(false);
-            return 0; // dummy
+            return 0;
         }, ct);
     private Task Enqueue(long chatId, Func<CancellationToken, Task> op, CancellationToken ct)
     {
@@ -147,7 +140,6 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
 
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // Если caller уже отменён — не кладём в очередь.
         if (ct.IsCancellationRequested)
         {
             tcs.TrySetCanceled(ct);
@@ -197,7 +189,6 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            // shutdown
         }
         catch (Exception ex)
         {
@@ -250,10 +241,8 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
 
     private async Task ApplyThrottlesAsync(long? chatId, CancellationToken ct)
     {
-        // Global throttling (SingleReader => последовательная обработка, атомики не нужны)
         if (_opt.GlobalMaxPerSecond > 0)
         {
-            // Минимальный интервал между запросами в тиках (округляем вверх, чтобы не получить 0)
             var minIntervalTicks = (long)Math.Ceiling(TimeSpan.TicksPerSecond / (double)_opt.GlobalMaxPerSecond);
             if (minIntervalTicks < 1) minIntervalTicks = 1;
 
@@ -268,7 +257,6 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             _globalNextAllowedUtcTicks = now + minIntervalTicks;
         }
 
-        // Per-chat throttling
         if (chatId is not null && _opt.PerChatMinDelay > TimeSpan.Zero)
         {
             var now = DateTimeOffset.UtcNow.UtcTicks;
@@ -289,7 +277,6 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
     {
         delay = default;
 
-        // 429 retry-after
         if (ex is ApiRequestException api && api.ErrorCode == 429)
         {
             var retryAfter = TryGetRetryAfterSeconds(api);
@@ -300,14 +287,12 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             return delay > TimeSpan.Zero;
         }
 
-        // 5xx
         if (ex is ApiRequestException api5 && api5.ErrorCode >= 500 && api5.ErrorCode < 600)
         {
             delay = CalculateBackoff(attempt);
             return delay > TimeSpan.Zero;
         }
 
-        // Network errors -> treat as 5xx
         if (ex is HttpRequestException)
         {
             delay = CalculateBackoff(attempt);
@@ -319,7 +304,6 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
 
     private TimeSpan CalculateBackoff(int attempt)
     {
-        // attempt=1 -> base; attempt=2 -> base*2; ...
         var pow = Math.Clamp(attempt - 1, 0, 10);
         var factor = 1 << pow;
 
@@ -363,7 +347,6 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         }
         catch
         {
-            // ignore
         }
 
         try
@@ -372,7 +355,6 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         }
         catch
         {
-            // ignore
         }
 
         _stop.Dispose();

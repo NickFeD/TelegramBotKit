@@ -1,8 +1,5 @@
 namespace TelegramBotKit.Commands;
 
-/// <summary>
-/// Метаданные для slash-команды (сообщение вида /start, /help и т.д.).
-/// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class MessageCommandAttribute : Attribute
 {
@@ -14,5 +11,8 @@ public sealed class MessageCommandAttribute : Attribute
         Command = command;
     }
 
+    /// <summary>
+    /// Gets the command.
+    /// </summary>
     public string Command { get; }
 }

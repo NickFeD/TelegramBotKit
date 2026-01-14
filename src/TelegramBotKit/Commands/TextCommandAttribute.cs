@@ -1,8 +1,5 @@
 namespace TelegramBotKit.Commands;
 
-/// <summary>
-/// Метаданные для текстовой команды (точное совпадение по тексту сообщения).
-/// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class TextCommandAttribute : Attribute
 {
@@ -20,6 +17,12 @@ public sealed class TextCommandAttribute : Attribute
         IgnoreCase = ignoreCase;
     }
 
+    /// <summary>
+    /// Gets the triggers.
+    /// </summary>
     public IReadOnlyList<string> Triggers { get; }
+    /// <summary>
+    /// Gets a value indicating whether triggers are case-insensitive.
+    /// </summary>
     public bool IgnoreCase { get; }
 }

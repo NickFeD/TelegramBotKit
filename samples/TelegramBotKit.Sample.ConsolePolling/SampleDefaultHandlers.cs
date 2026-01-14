@@ -4,9 +4,6 @@ using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit.Sample.ConsolePolling;
 
-/// <summary>
-/// Одна реализация сразу для всех default-интерфейсов (удобно для sample).
-/// </summary>
 public sealed class SampleDefaultHandlers :
     IDefaultMessageHandler,
     IDefaultCallbackHandler,
@@ -17,7 +14,6 @@ public sealed class SampleDefaultHandlers :
 
     public Task HandleAsync(Message message, BotContext ctx)
     {
-        // non-text / или "ничего не сматчилось" (если сюда попали)
         return ctx.Sender.SendText(
             chatId: message.Chat.Id,
             msg: new SendText { Text = "Я такое не обрабатываю. Попробуй /start" },

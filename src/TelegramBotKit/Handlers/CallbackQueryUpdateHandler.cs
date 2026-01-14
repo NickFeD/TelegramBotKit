@@ -5,9 +5,6 @@ using TelegramBotKit.Routing;
 
 namespace TelegramBotKit.Handlers;
 
-/// <summary>
-/// Обрабатывает UpdateType.CallbackQuery (payload CallbackQuery) и маршрутизирует в команды.
-/// </summary>
 internal sealed class CallbackQueryUpdateHandler : IUpdatePayloadHandler<CallbackQuery>
 {
     private readonly CommandRouter _router;

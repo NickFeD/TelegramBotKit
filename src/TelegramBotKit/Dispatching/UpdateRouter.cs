@@ -8,10 +8,6 @@ using TelegramBotKit.Middleware;
 
 namespace TelegramBotKit.Dispatching;
 
-/// <summary>
-/// Главная точка входа для обработки Update:
-/// scope-per-update -> BotContext -> middleware -> dispatch по UpdateType.
-/// </summary>
 internal sealed class UpdateRouter : IUpdateDispatcher
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -21,7 +17,6 @@ internal sealed class UpdateRouter : IUpdateDispatcher
     private readonly IDefaultUpdateHandler _defaultUpdate;
     private readonly ILogger<UpdateRouter> _log;
 
-    // "Скомпилированный" пайплайн: middlewares + terminal.
     private readonly BotContextDelegate _app;
 
     public UpdateRouter(
@@ -40,8 +35,6 @@ internal sealed class UpdateRouter : IUpdateDispatcher
         _defaultUpdate = defaultUpdate ?? throw new ArgumentNullException(nameof(defaultUpdate));
         _log = log ?? throw new ArgumentNullException(nameof(log));
 
-        // Собираем пайплайн ровно один раз (как в ASP.NET):
-        // middleware создаются один раз и дальше работают многопоточно.
         _app = (pipeline ?? throw new ArgumentNullException(nameof(pipeline)))
             .Build(TerminalAsync);
     }
@@ -64,8 +57,6 @@ internal sealed class UpdateRouter : IUpdateDispatcher
         using var scope = _scopeFactory.CreateScope();
         var ctx = new BotContext(update, _botClient, _sender, scope.ServiceProvider, ct);
 
-        // Всегда прогоняем через pipeline, чтобы работали глобальные middleware
-        // (логирование/метрики/ошибки).
         await _app(ctx).ConfigureAwait(false);
     }
 }
