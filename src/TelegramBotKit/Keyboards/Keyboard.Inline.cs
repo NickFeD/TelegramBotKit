@@ -6,7 +6,7 @@ namespace TelegramBotKit.Keyboards;
 /// <summary>
 /// Provides a keyboard.
 /// </summary>
-public static class Keyboard
+public static partial class Keyboard
 {
     private const int MaxCallbackDataBytes = 64;
 
