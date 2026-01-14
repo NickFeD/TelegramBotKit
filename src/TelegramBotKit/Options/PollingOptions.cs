@@ -5,6 +5,12 @@ namespace TelegramBotKit.Options;
 public sealed class PollingOptions
 {
     /// <summary>
+    /// Максимальная параллельность обработки апдейтов.
+    /// 0 или меньше = без лимитов (как было в MVP).
+    /// </summary>
+    public int MaxDegreeOfParallelism { get; set; } = 0;
+
+    /// <summary>
     /// GetUpdates limit (1..100). Обычно 100.
     /// </summary>
     public int Limit { get; set; } = 100;

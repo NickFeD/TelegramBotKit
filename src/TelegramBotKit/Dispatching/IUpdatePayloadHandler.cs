@@ -7,18 +7,13 @@ namespace TelegramBotKit.Dispatching;
 /// </summary>
 public interface IUpdatePayloadHandler<TPayload> where TPayload : class
 {
-    Task HandleAsync(TPayload payload, BotContext ctx, CancellationToken ct);
+    Task HandleAsync(TPayload payload, BotContext ctx);
 }
 
-// Ниже маркерные интерфейсы для удобства.
-
-public interface IInlineQueryHandler : IUpdatePayloadHandler<InlineQuery> { }
-public interface IChosenInlineResultHandler : IUpdatePayloadHandler<ChosenInlineResult> { }
-public interface IMyChatMemberHandler : IUpdatePayloadHandler<ChatMemberUpdated> { }
-public interface IChatMemberHandler : IUpdatePayloadHandler<ChatMemberUpdated> { }
-public interface IPollHandler : IUpdatePayloadHandler<Poll> { }
-public interface IPollAnswerHandler : IUpdatePayloadHandler<PollAnswer> { }
-public interface IChatJoinRequestHandler : IUpdatePayloadHandler<ChatJoinRequest> { }
-
-// и т.д. — можно расширять по мере надобности.
-// При этом “ядро” всё равно generic: IUpdatePayloadHandler<TPayload>.
+// NOTE:
+// Раньше здесь были «маркерные» интерфейсы вроде IInlineQueryHandler и т.п.
+// От них отказались намеренно:
+// 1) они усложняют API;
+// 2) в стандартном DI .NET регистрация как IInlineQueryHandler НЕ делает сервис
+//    доступным как IUpdatePayloadHandler<InlineQuery>.
+// Вместо этого используется только generic-обработчик + маппинг UpdateType -> payload.

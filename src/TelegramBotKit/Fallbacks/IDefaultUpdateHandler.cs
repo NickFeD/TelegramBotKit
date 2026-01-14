@@ -5,5 +5,5 @@
 /// </summary>
 public interface IDefaultUpdateHandler
 {
-    Task HandleAsync(BotContext ctx, CancellationToken ct);
+    Task HandleAsync(BotContext ctx);
 }

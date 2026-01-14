@@ -2,7 +2,7 @@
 
 namespace TelegramBotKit.Options;
 
-public sealed class TelegramBotKitOptionsValidator : IValidateOptions<TelegramBotKitOptions>
+internal sealed class TelegramBotKitOptionsValidator : IValidateOptions<TelegramBotKitOptions>
 {
     public ValidateOptionsResult Validate(string? name, TelegramBotKitOptions options)
     {
@@ -20,6 +20,9 @@ public sealed class TelegramBotKitOptionsValidator : IValidateOptions<TelegramBo
 
         if (options.Polling.TimeoutSeconds is < 0 or > 60)
             return ValidateOptionsResult.Fail("TelegramBotKitOptions.Polling.TimeoutSeconds must be between 0 and 60.");
+
+        if (options.Polling.MaxDegreeOfParallelism < 0)
+            return ValidateOptionsResult.Fail("TelegramBotKitOptions.Polling.MaxDegreeOfParallelism must be >= 0.");
 
         return ValidateOptionsResult.Success;
     }

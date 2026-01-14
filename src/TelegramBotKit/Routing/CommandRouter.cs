@@ -1,4 +1,5 @@
-﻿using Telegram.Bot.Types;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
 
 namespace TelegramBotKit.Routing;
@@ -6,34 +7,23 @@ namespace TelegramBotKit.Routing;
 /// <summary>
 /// Роутит Message/CallbackQuery в зарегистрированные команды.
 /// </summary>
-public sealed class CommandRouter
+internal sealed class CommandRouter
 {
-    private readonly IReadOnlyList<IMessageCommand> _messageCommands;
-    private readonly IReadOnlyList<ITextCommand> _textCommands;
-    private readonly IReadOnlyList<ICallbackCommand> _callbackCommands;
+    private readonly CommandRegistry _registry;
+    private readonly IServiceProvider _services;
 
-    public CommandRouter(
-        IEnumerable<IMessageCommand> messageCommands,
-        IEnumerable<ITextCommand> textCommands,
-        IEnumerable<ICallbackCommand> callbackCommands)
+    public CommandRouter(CommandRegistry registry, IServiceProvider services)
     {
-        _messageCommands = messageCommands?.ToList() ?? throw new ArgumentNullException(nameof(messageCommands));
-        _textCommands = textCommands?.ToList() ?? throw new ArgumentNullException(nameof(textCommands));
-        _callbackCommands = callbackCommands?.ToList() ?? throw new ArgumentNullException(nameof(callbackCommands));
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _services = services ?? throw new ArgumentNullException(nameof(services));
     }
-
-    /// <summary>
-    /// Back-compat: старый метод. Теперь просто вызывает Try-версию.
-    /// </summary>
-    public async Task RouteMessageAsync(Message message, BotContext ctx, CancellationToken ct)
-        => _ = await TryRouteMessageAsync(message, ctx, ct).ConfigureAwait(false);
 
     /// <summary>
     /// Возвращает true, если сообщение было обработано (message-командой или text-командой).
     /// </summary>
-    public async Task<bool> TryRouteMessageAsync(Message message, BotContext ctx, CancellationToken ct)
+    public async Task<bool> TryRouteMessageAsync(Message message, BotContext ctx)
     {
-        ct.ThrowIfCancellationRequested();
+        ctx.CancellationToken.ThrowIfCancellationRequested();
 
         var text = message.Text;
         if (string.IsNullOrWhiteSpace(text))
@@ -48,59 +38,29 @@ public sealed class CommandRouter
             if (cmd is null)
                 return false;
 
-            var handler = _messageCommands.FirstOrDefault(c =>
-                string.Equals(NormalizeSlash(c.Command), cmd, StringComparison.OrdinalIgnoreCase));
-
-            if (handler is null)
+            if (!_registry.TryGetMessageCommand(cmd, out var commandType))
                 return false;
 
-            await handler.HandleAsync(message, ctx, ct).ConfigureAwait(false);
+            var handler = (IMessageCommand)_services.GetRequiredService(commandType);
+            await handler.HandleAsync(message, ctx).ConfigureAwait(false);
             return true;
         }
 
-        // 2) Текстовые команды (триггеры)
-        // Выбираем "лучшее" совпадение: самый длинный триггер (чтобы "меню настройки" победило "меню").
-        ITextCommand? best = null;
-        var bestLen = -1;
-
-        foreach (var cmd in _textCommands)
-        {
-            foreach (var trig in cmd.Triggers)
-            {
-                if (string.IsNullOrWhiteSpace(trig))
-                    continue;
-
-                var ok = cmd.IgnoreCase
-                    ? string.Equals(text, trig, StringComparison.OrdinalIgnoreCase)
-                    : string.Equals(text, trig, StringComparison.Ordinal);
-
-                if (ok && trig.Length > bestLen)
-                {
-                    best = cmd;
-                    bestLen = trig.Length;
-                }
-            }
-        }
-
-        if (best is null)
+        // 2) Текстовые команды (O(1) lookup)
+        if (!_registry.TryGetTextCommand(text, out var textCommandType))
             return false;
 
-        await best.HandleAsync(message, ctx, ct).ConfigureAwait(false);
+        var bestHandler = (ITextCommand)_services.GetRequiredService(textCommandType);
+        await bestHandler.HandleAsync(message, ctx).ConfigureAwait(false);
         return true;
     }
 
     /// <summary>
-    /// Back-compat: старый метод. Теперь просто вызывает Try-версию.
-    /// </summary>
-    public async Task RouteCallbackAsync(CallbackQuery query, BotContext ctx, CancellationToken ct)
-        => _ = await TryRouteCallbackAsync(query, ctx, ct).ConfigureAwait(false);
-
-    /// <summary>
     /// Возвращает true, если callback был обработан.
     /// </summary>
-    public async Task<bool> TryRouteCallbackAsync(CallbackQuery query, BotContext ctx, CancellationToken ct)
+    public async Task<bool> TryRouteCallbackAsync(CallbackQuery query, BotContext ctx)
     {
-        ct.ThrowIfCancellationRequested();
+        ctx.CancellationToken.ThrowIfCancellationRequested();
 
         var data = query.Data;
         if (string.IsNullOrWhiteSpace(data))
@@ -109,13 +69,11 @@ public sealed class CommandRouter
         if (!TryParseCallbackData(data, out var key, out var args))
             return false;
 
-        var handler = _callbackCommands.FirstOrDefault(c =>
-            string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
-
-        if (handler is null)
+        if (!_registry.TryGetCallbackCommand(key, out var commandType))
             return false;
 
-        await handler.HandleAsync(query, args, ctx, ct).ConfigureAwait(false);
+        var handler = (ICallbackCommand)_services.GetRequiredService(commandType);
+        await handler.HandleAsync(query, args, ctx).ConfigureAwait(false);
         return true;
     }
 
@@ -132,23 +90,6 @@ public sealed class CommandRouter
             first = first[..at];
 
         return first;
-    }
-
-    private static string NormalizeSlash(string cmd)
-    {
-        if (string.IsNullOrWhiteSpace(cmd))
-            return string.Empty;
-
-        cmd = cmd.Trim();
-
-        if (cmd[0] != '/')
-            cmd = "/" + cmd;
-
-        var at = cmd.IndexOf('@');
-        if (at >= 0)
-            cmd = cmd[..at];
-
-        return cmd;
     }
 
     private static bool TryParseCallbackData(string data, out string key, out string[] args)

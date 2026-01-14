@@ -1,6 +1,6 @@
-﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotKit.Fallbacks;
+using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit.Sample.ConsolePolling;
 
@@ -12,22 +12,23 @@ public sealed class SampleDefaultHandlers :
     IDefaultCallbackHandler,
     IDefaultUpdateHandler
 {
-    public Task HandleAsync(BotContext ctx, CancellationToken ct)
+    public Task HandleAsync(BotContext ctx)
         => Task.CompletedTask;
 
-    public Task HandleAsync(Message message, BotContext ctx, CancellationToken ct)
+    public Task HandleAsync(Message message, BotContext ctx)
     {
         // non-text / или "ничего не сматчилось" (если сюда попали)
-        return ctx.BotClient.SendMessage(
+        return ctx.Sender.SendText(
             chatId: message.Chat.Id,
-            text: "Я такое не обрабатываю. Попробуй /start",
-            cancellationToken: ct);
+            msg: new SendText { Text = "Я такое не обрабатываю. Попробуй /start" },
+            ct: ctx.CancellationToken);
     }
-    public Task HandleAsync(CallbackQuery query, BotContext ctx, CancellationToken ct)
+
+    public Task HandleAsync(CallbackQuery query, BotContext ctx)
     {
-        return ctx.BotClient.AnswerCallbackQuery(
+        return ctx.Sender.AnswerCallback(
             callbackQueryId: query.Id,
-            text: "Неизвестная кнопка (fallback)",
-            cancellationToken: ct);
+            answer: new AnswerCallback { Text = "Неизвестная кнопка (fallback)" },
+            ct: ctx.CancellationToken);
     }
 }

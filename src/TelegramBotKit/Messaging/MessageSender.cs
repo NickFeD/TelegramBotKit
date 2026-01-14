@@ -1,9 +1,11 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
-public sealed class MessageSender : IMessageSender
+internal sealed class MessageSender : IMessageSender
 {
     private readonly ITelegramBotClient _bot;
 
@@ -13,7 +15,7 @@ public sealed class MessageSender : IMessageSender
     public Task<Message> SendText(long chatId, SendText msg, CancellationToken ct = default)
     {
         if (chatId == 0) throw new ArgumentOutOfRangeException(nameof(chatId));
-        ValidateText(msg?.Text);
+        ValidateText(msg.Text);
 
         return _bot.SendMessage(
             chatId: chatId,
@@ -30,7 +32,7 @@ public sealed class MessageSender : IMessageSender
     public Task<Message> ReplyText(Message replyTo, SendText msg, CancellationToken ct = default)
     {
         if (replyTo is null) throw new ArgumentNullException(nameof(replyTo));
-        ValidateText(msg?.Text);
+        ValidateText(msg.Text);
 
         return _bot.SendMessage(
             chatId: replyTo.Chat.Id,
@@ -45,11 +47,77 @@ public sealed class MessageSender : IMessageSender
             cancellationToken: ct);
     }
 
+
+    public Task<Message> SendPhoto(long chatId, SendPhoto msg, CancellationToken ct = default)
+    {
+        if (chatId == 0) throw new ArgumentOutOfRangeException(nameof(chatId));
+        if (msg is null) throw new ArgumentNullException(nameof(msg));
+
+        return _bot.SendPhoto(
+            chatId: chatId,
+            photo: msg.Photo,
+            caption: msg.Caption,
+            parseMode: msg.ParseMode,
+            captionEntities: msg.CaptionEntities,
+            hasSpoiler: msg.HasSpoiler,
+            replyMarkup: msg.ReplyMarkup,
+            disableNotification: msg.DisableNotification,
+            protectContent: msg.ProtectContent,
+            cancellationToken: ct);
+    }
+
+    public Task<Message> ReplyPhoto(Message replyTo, SendPhoto msg, CancellationToken ct = default)
+    {
+        if (replyTo is null) throw new ArgumentNullException(nameof(replyTo));
+        if (msg is null) throw new ArgumentNullException(nameof(msg));
+
+        return _bot.SendPhoto(
+            chatId: replyTo.Chat.Id,
+            photo: msg.Photo,
+            caption: msg.Caption,
+            parseMode: msg.ParseMode,
+            captionEntities: msg.CaptionEntities,
+            replyParameters: new ReplyParameters { MessageId = replyTo.Id },
+            hasSpoiler: msg.HasSpoiler,
+            replyMarkup: msg.ReplyMarkup,
+            disableNotification: msg.DisableNotification,
+            protectContent: msg.ProtectContent,
+            cancellationToken: ct);
+    }
+
+    public Task EditReplyMarkup(long chatId, int messageId, InlineKeyboardMarkup? keyboard, CancellationToken ct = default)
+    {
+        return _bot.EditMessageReplyMarkup(
+            chatId: chatId,
+            messageId: messageId,
+            replyMarkup: keyboard,
+            cancellationToken: ct);
+    }
+
+    public Task EditPhoto(long chatId, int messageId, EditPhoto edit, CancellationToken ct = default)
+    {
+        if (edit is null) throw new ArgumentNullException(nameof(edit));
+
+        var media = new InputMediaPhoto(edit.Photo)
+        {
+            Caption = edit.Caption,
+            ParseMode = edit.ParseMode, 
+        };
+
+        return _bot.EditMessageMedia(
+            chatId: chatId,
+            messageId: messageId,
+            media: media,
+            replyMarkup: edit.ReplyMarkup,
+            cancellationToken: ct);
+    }
+
+
     public Task<Message> EditText(long chatId, int messageId, EditText edit, CancellationToken ct = default)
     {
         if (chatId == 0) throw new ArgumentOutOfRangeException(nameof(chatId));
         if (messageId <= 0) throw new ArgumentOutOfRangeException(nameof(messageId));
-        ValidateText(edit?.Text);
+        ValidateText(edit.Text);
 
         return _bot.EditMessageText(
             chatId: chatId,

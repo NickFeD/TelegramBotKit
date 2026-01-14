@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
+using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit;
 
@@ -12,11 +13,13 @@ public sealed class BotContext
     public BotContext(
         Update update,
         ITelegramBotClient botClient,
+        IMessageSender sender,
         IServiceProvider services,
         CancellationToken cancellationToken)
     {
         Update = update ?? throw new ArgumentNullException(nameof(update));
         BotClient = botClient ?? throw new ArgumentNullException(nameof(botClient));
+        Sender = sender ?? throw new ArgumentNullException(nameof(sender));
         Services = services ?? throw new ArgumentNullException(nameof(services));
         CancellationToken = cancellationToken;
         Items = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -26,6 +29,12 @@ public sealed class BotContext
     /// Сырой апдейт от Telegram (в нём может быть Message, CallbackQuery и т.д.)
     /// </summary>
     public Update Update { get; }
+
+
+    /// <summary>
+    /// Высокоуровневый sender (может быть с очередью/ретраями).
+    /// </summary>
+    public IMessageSender Sender { get; }
 
     /// <summary>
     /// Клиент Telegram (низкоуровневый).

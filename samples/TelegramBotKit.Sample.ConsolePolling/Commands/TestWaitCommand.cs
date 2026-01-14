@@ -1,29 +1,27 @@
-﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
 using TelegramBotKit.Conversations;
+using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit.Sample.ConsolePolling.Commands;
 
-[Command]
+[CallbackCommand("test_wait")]
 public sealed class TestWaitCommand : ICallbackCommand
 {
-    public string Key => "test_wait";
-
-    public async Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx, CancellationToken ct)
+    public async Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx)
     {
         if (query.Message is null)
         {
-            await ctx.BotClient.AnswerCallbackQuery(query.Id, "Нет message в callback", cancellationToken: ct);
+            await ctx.Sender.AnswerCallback(query.Id, new AnswerCallback { Text = "Нет message в callback" }, ctx.CancellationToken);
             return;
         }
 
-        await ctx.BotClient.AnswerCallbackQuery(query.Id, "Ок, жду сообщение…", cancellationToken: ct);
+        await ctx.Sender.AnswerCallback(query.Id, new AnswerCallback { Text = "Ок, жду сообщение…" }, ctx.CancellationToken);
 
-        await ctx.BotClient.SendMessage(
+        await ctx.Sender.SendText(
             chatId: query.Message.Chat.Id,
-            text: "Напиши любое сообщение в течение 30 секунд.",
-            cancellationToken: ct);
+            msg: new SendText { Text = "Напиши любое сообщение в течение 30 секунд." },
+            ct: ctx.CancellationToken);
 
         var wait = ctx.GetRequiredService<WaitForUserResponse>();
 
@@ -31,20 +29,20 @@ public sealed class TestWaitCommand : ICallbackCommand
             chatId: query.Message.Chat.Id,
             userId: query.From.Id,
             timeout: TimeSpan.FromSeconds(30),
-            ct: ct);
+            ct: ctx.CancellationToken);
 
         if (msg is null)
         {
-            await ctx.BotClient.SendMessage(
+            await ctx.Sender.SendText(
                 chatId: query.Message.Chat.Id,
-                text: "Таймаут ⏰",
-                cancellationToken: ct);
+                msg: new SendText { Text = "Таймаут ⏰" },
+                ct: ctx.CancellationToken);
             return;
         }
 
-        await ctx.BotClient.SendMessage(
+        await ctx.Sender.SendText(
             chatId: query.Message.Chat.Id,
-            text: $"Получил: {msg.Text ?? "<non-text>"}",
-            cancellationToken: ct);
+            msg: new SendText { Text = $"Получил: {msg.Text ?? "<non-text>"}" },
+            ct: ctx.CancellationToken);
     }
 }

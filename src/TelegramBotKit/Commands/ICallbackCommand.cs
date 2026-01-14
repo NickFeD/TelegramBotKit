@@ -8,10 +8,5 @@ namespace TelegramBotKit.Commands;
 /// </summary>
 public interface ICallbackCommand : ICommand
 {
-    /// <summary>
-    /// Ключ обработчика (первый токен callback_data).
-    /// </summary>
-    string Key { get; }
-
-    Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx, CancellationToken ct);
+    Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx);
 }

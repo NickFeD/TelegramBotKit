@@ -1,20 +1,15 @@
-﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
+using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit.Sample.ConsolePolling.Commands;
 
-[Command]
+[TextCommand("echo", "эхо")]
 public sealed class EchoTextCommand : ITextCommand
 {
-    public IReadOnlyCollection<string> Triggers => new[] { "echo", "эхо" };
-    public bool IgnoreCase => true;
-
-    public async Task HandleAsync(Message message, BotContext ctx, CancellationToken ct)
-    {
-        await ctx.BotClient.SendMessage(
+    public Task HandleAsync(Message message, BotContext ctx)
+        => ctx.Sender.SendText(
             chatId: message.Chat.Id,
-            text: $"echo: {message.Text}",
-            cancellationToken: ct);
-    }
+            msg: new SendText { Text = $"echo: {message.Text}" },
+            ct: ctx.CancellationToken);
 }

@@ -9,7 +9,7 @@ namespace TelegramBotKit.Handlers;
 /// <summary>
 /// Обрабатывает UpdateType.Message (payload Message) и маршрутизирует в команды.
 /// </summary>
-public sealed class MessageUpdateHandler : IUpdatePayloadHandler<Message>
+internal sealed class MessageUpdateHandler : IUpdatePayloadHandler<Message>
 {
     private readonly CommandRouter _router;
     private readonly WaitForUserResponse _wait;
@@ -25,20 +25,20 @@ public sealed class MessageUpdateHandler : IUpdatePayloadHandler<Message>
         _defaultMessage = defaultMessage ?? throw new ArgumentNullException(nameof(defaultMessage));
     }
 
-    public async Task HandleAsync(Message payload, BotContext ctx, CancellationToken ct)
+    public async Task HandleAsync(Message payload, BotContext ctx)
     {
-        ct.ThrowIfCancellationRequested();
+        ctx.CancellationToken.ThrowIfCancellationRequested();
 
         // 1) Сначала пробуем доставить в ожидание ответа (если оно включено на чат/пользователя)
         if (_wait.TryPublish(payload))
             return;
 
         // 2) Пытаемся сматчить команды
-        var handled = await _router.TryRouteMessageAsync(payload, ctx, ct).ConfigureAwait(false);
+        var handled = await _router.TryRouteMessageAsync(payload, ctx).ConfigureAwait(false);
         if (handled)
             return;
 
         // 3) Иначе — default
-        await _defaultMessage.HandleAsync(payload, ctx, ct).ConfigureAwait(false);
+        await _defaultMessage.HandleAsync(payload, ctx).ConfigureAwait(false);
     }
 }

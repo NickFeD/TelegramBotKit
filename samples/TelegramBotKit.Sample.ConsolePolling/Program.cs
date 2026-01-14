@@ -5,14 +5,13 @@ using Microsoft.Extensions.Hosting;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Fallbacks;
 using TelegramBotKit.Hosting;          // <-- проект TelegramBotKit.Hosting
-using TelegramBotKit.Middleware;
 using TelegramBotKit.Sample.ConsolePolling;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
-builder.Services.AddTelegramBotKit(opt =>
+var bot = builder.Services.AddTelegramBotKit(opt =>
 {
     builder.Configuration.GetSection("TelegramBotKit").Bind(opt);
 });
@@ -26,13 +25,22 @@ builder.Services.AddSingleton<IDefaultCallbackHandler, SampleDefaultHandlers>();
 builder.Services.AddSingleton<IDefaultUpdateHandler, SampleDefaultHandlers>();
 
 // Middleware (лог + traceId в ctx.Items)
-builder.Services.AddSingleton<IMiddlewareConfigurator, SampleMiddlewareConfigurator>();
+bot.UseMiddleware<TraceLoggingMiddleware>();
 
-// Дополнительные маппинги UpdateType -> payload (пример расширения)
-builder.Services.AddSingleton<TelegramBotKit.Dispatching.IRegistryConfigurator, SampleRegistryConfigurator>();
+// Большинство UpdateType уже замапплены по умолчанию (Message, CallbackQuery, InlineQuery, Poll...).
+// Если захочешь поддержать редкий/новый UpdateType — добавь bot.Map<...>(...).
 
-// Запуск polling
-builder.Services.AddHostedService<PollingHostedService>();
+// Очередной sender: защита от 429/5xx + троттлинг
+bot.UseQueuedMessageSender(o =>
+{
+    o.GlobalMaxPerSecond = 25;
+    o.PerChatMinDelay = TimeSpan.FromSeconds(1);
+    o.MaxQueueSize = 2000;
+    o.MaxRetryAttempts = 5;
+});
+
+// Запуск polling (включает actor-per-chat/user диспетчер)
+builder.Services.AddTelegramBotKitPolling();
 
 var host = builder.Build();
 await host.RunAsync();

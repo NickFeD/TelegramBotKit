@@ -5,28 +5,27 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using TelegramBotKit.Conversations;
-using TelegramBotKit.Dispatching;
 using TelegramBotKit.Options;
 
 namespace TelegramBotKit.Hosting;
 
-public sealed class PollingHostedService : BackgroundService
+internal sealed class PollingHostedService : BackgroundService
 {
     private readonly ITelegramBotClient _bot;
-    private readonly UpdateRouter _router;
+    private readonly UpdateActorScheduler _scheduler;
     private readonly WaitForUserResponse _wait;
     private readonly IOptions<TelegramBotKitOptions> _options;
     private readonly ILogger<PollingHostedService> _log;
 
     public PollingHostedService(
         ITelegramBotClient bot,
-        UpdateRouter router,
+        UpdateActorScheduler scheduler,
         WaitForUserResponse wait,
         IOptions<TelegramBotKitOptions> options,
         ILogger<PollingHostedService> log)
     {
         _bot = bot;
-        _router = router;
+        _scheduler = scheduler;
         _wait = wait;
         _options = options;
         _log = log;
@@ -37,7 +36,9 @@ public sealed class PollingHostedService : BackgroundService
         int? offset = null;
         var o = _options.Value;
 
-        _log.LogInformation("TelegramBotKit polling started (no limits).");
+        _log.LogInformation(
+            "TelegramBotKit polling started (MaxDegreeOfParallelism={Dop}).",
+            o.Polling.MaxDegreeOfParallelism);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -82,22 +83,11 @@ public sealed class PollingHostedService : BackgroundService
                 if (upd.Message is not null && _wait.TryPublish(upd.Message))
                     continue;
 
-                // Fire-and-forget обработка без лимитов
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _router.RouteAsync(upd, stoppingToken).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                    {
-                        // ignore
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.LogError(ex, "Update processing failed, updateId={UpdateId}", upd.Id);
-                    }
-                }, CancellationToken.None);
+                // Actor-per-chat/user dispatch:
+                // - Message-like updates are ordered by ChatId
+                // - Inline flows are ordered by UserId
+                // - CallbackQuery is processed without ordering (buttons)
+                await _scheduler.EnqueueAsync(upd, stoppingToken).ConfigureAwait(false);
             }
         }
 

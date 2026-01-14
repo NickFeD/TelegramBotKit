@@ -4,5 +4,5 @@
 
 internal sealed class NoopDefaultUpdateHandler : IDefaultUpdateHandler
 {
-    public Task HandleAsync(BotContext ctx, CancellationToken ct) => Task.CompletedTask;
+    public Task HandleAsync(BotContext ctx) => Task.CompletedTask;
 }

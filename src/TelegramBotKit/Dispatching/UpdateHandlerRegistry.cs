@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using TelegramBotKit.Fallbacks;
 
 namespace TelegramBotKit.Dispatching;
 
@@ -8,9 +9,10 @@ namespace TelegramBotKit.Dispatching;
 /// Реестр: UpdateType -> (extract payload + вызвать все обработчики этого payload).
 /// Позволяет убрать монолитный switch и расширять поддержку новых UpdateType.
 /// </summary>
-public sealed class UpdateHandlerRegistry
+internal sealed class UpdateHandlerRegistry
 {
-    private readonly Dictionary<UpdateType, Func<IServiceProvider, BotContext, CancellationToken, Task>> _routes = new();
+    // Минимальная сигнатура маршрута: BotContext уже содержит Services и CancellationToken.
+    private readonly Dictionary<UpdateType, Func<BotContext, Task>> _routes = new();
     private readonly object _sync = new();
     private volatile bool _isFrozen;
 
@@ -27,14 +29,26 @@ public sealed class UpdateHandlerRegistry
 
         lock (_sync)
         {
-            _routes[type] = async (sp, ctx, ct) =>
+            _routes[type] = async ctx =>
             {
                 var payload = extractor(ctx.Update);
                 if (payload is null) return;
 
-                var handlers = sp.GetServices<IUpdatePayloadHandler<TPayload>>();
-                foreach (var h in handlers)
-                    await h.HandleAsync(payload, ctx, ct).ConfigureAwait(false);
+                var any = false;
+                foreach (var h in ctx.Services.GetServices<IUpdatePayloadHandler<TPayload>>())
+                {
+                    any = true;
+                    await h.HandleAsync(payload, ctx).ConfigureAwait(false);
+                }
+
+                // Если обработчиков для payload-типа не зарегистрировано —
+                // даём шанс глобальному fallback-обработчику Update.
+                if (!any)
+                {
+                    var fallback = ctx.Services.GetService<IDefaultUpdateHandler>();
+                    if (fallback is not null)
+                        await fallback.HandleAsync(ctx).ConfigureAwait(false);
+                }
             };
         }
 
@@ -44,7 +58,7 @@ public sealed class UpdateHandlerRegistry
     /// <summary>
     /// Пытаемся получить маршрут обработки UpdateType.
     /// </summary>
-    public bool TryGetRoute(UpdateType type, out Func<IServiceProvider, BotContext, CancellationToken, Task> route)
+    public bool TryGetRoute(UpdateType type, out Func<BotContext, Task> route)
         => _routes.TryGetValue(type, out route!);
 
     /// <summary>

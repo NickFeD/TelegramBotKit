@@ -8,5 +8,5 @@ namespace TelegramBotKit.Fallbacks;
 /// </summary>
 public interface IDefaultMessageHandler
 {
-    Task HandleAsync(Message message, BotContext ctx, CancellationToken ct);
+    Task HandleAsync(Message message, BotContext ctx);
 }

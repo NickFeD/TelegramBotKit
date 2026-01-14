@@ -1,21 +1,19 @@
-﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
+using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit.Sample.ConsolePolling.Commands;
 
-[Command]
+[CallbackCommand("like")]
 public sealed class LikeCallbackCommand : ICallbackCommand
 {
-    public string Key => "like";
-
-    public async Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx, CancellationToken ct)
+    public Task HandleAsync(CallbackQuery query, string[] args, BotContext ctx)
     {
         var id = args.Length > 0 ? args[0] : "?";
 
-        await ctx.BotClient.AnswerCallbackQuery(
+        return ctx.Sender.AnswerCallback(
             callbackQueryId: query.Id,
-            text: $"Лайк принят ❤️ (id={id})",
-            cancellationToken: ct);
+            answer: new AnswerCallback { Text = $"Лайк принят ❤️ (id={id})" },
+            ct: ctx.CancellationToken);
     }
 }

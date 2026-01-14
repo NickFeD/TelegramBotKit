@@ -4,7 +4,6 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/TelegramBotKit.Hosting/TelegramBotKit.Hosting.csproj" Id="346c30a5-68ab-42f7-8abb-e1f3c010d15f" />
-    <Project Path="src/TelegramBotKit.Routing/TelegramBotKit.Routing.csproj" Id="9750263f-c74d-4c02-baae-8e2034779c31" />
     <Project Path="src/TelegramBotKit/TelegramBotKit.csproj" Id="b4ebd1b4-f422-498c-8fec-9ef8c8713ed2" />
   </Folder>
   <Folder Name="/Элементы решения/">

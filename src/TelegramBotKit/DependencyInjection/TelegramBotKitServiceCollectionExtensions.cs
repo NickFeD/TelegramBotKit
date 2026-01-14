@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using System.Linq.Expressions;
 using System.Reflection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -41,14 +42,16 @@ public static class TelegramBotKitServiceCollectionExtensions
             return new TelegramBotClient(clientOptions);
         });
 
-        // Sender
-        services.AddSingleton<IMessageSender, MessageSender>();
+        // Sender (по умолчанию без очереди)
+        services.TryAddSingleton<MessageSender>();
+        services.TryAddSingleton<IMessageSender>(sp => sp.GetRequiredService<MessageSender>());
 
         // Conversations
         services.AddSingleton<WaitForUserResponse>();
 
         // Routing
         services.AddScoped<CommandRouter>();
+        services.TryAddSingleton<CommandRegistry>();
 
         // Update payload handlers (scope-per-update)
         services.AddScoped<IUpdatePayloadHandler<Message>, MessageUpdateHandler>();
@@ -69,19 +72,108 @@ public static class TelegramBotKitServiceCollectionExtensions
         {
             var reg = new UpdateHandlerRegistry();
 
-            reg.Map<Message>(UpdateType.Message, u => u.Message);
-            reg.Map<CallbackQuery>(UpdateType.CallbackQuery, u => u.CallbackQuery);
+            // По умолчанию маппим *все* UpdateType по соглашению:
+            // если в Telegram.Bot.Types.Update есть property с таким же именем, как enum UpdateType,
+            // то делаем Map(UpdateType.X, u => u.X).
+            // Это даёт «из коробки» поддержку новых типов без маркерных интерфейсов.
+            MapUpdatePayloadsByConvention(reg);
 
-            foreach (var cfg in sp.GetServices<IRegistryConfigurator>())
-                cfg.Configure(reg);
+            // Маппинги, добавленные через builder.Map(...)
+            foreach (var add in builder.RegistryActions)
+                add(reg);
 
             reg.Freeze();
             return reg;
         });
 
-        services.AddSingleton<UpdateRouter>();
+        services.AddSingleton<IUpdateDispatcher, UpdateRouter>();
 
-        return new TelegramBotKitBuilder(services);
+        // IMPORTANT: return the same builder instance.
+        // Otherwise middleware/commands added by the caller after AddTelegramBotKit(...)
+        // would be added to a different builder and never make it into the pipeline.
+        return builder;
+    }
+
+    // ------------------- Update handler registration -------------------
+
+    /// <summary>
+    /// Удобная регистрация обработчика payload-типа.
+    ///
+    /// ВАЖНО: регистрируй именно как IUpdatePayloadHandler&lt;TPayload&gt;,
+    /// иначе стандартный DI не сможет найти обработчик по generic-интерфейсу.
+    /// </summary>
+    public static IServiceCollection AddUpdateHandler<TPayload, THandler>(
+        this IServiceCollection services,
+        ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        where TPayload : class
+        where THandler : class, IUpdatePayloadHandler<TPayload>
+    {
+        if (services is null) throw new ArgumentNullException(nameof(services));
+
+        services.Add(new ServiceDescriptor(typeof(IUpdatePayloadHandler<TPayload>), typeof(THandler), lifetime));
+        return services;
+    }
+
+
+// ------------------- Message sender decorators -------------------
+
+/// <summary>
+/// Включить очередной sender с троттлингом и ретраями (защита от 429/5xx).
+/// По умолчанию AddTelegramBotKit регистрирует простой MessageSender без очереди.
+/// </summary>
+public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
+    this IServiceCollection services,
+    Action<QueuedMessageSenderOptions>? configure = null)
+{
+    if (services is null) throw new ArgumentNullException(nameof(services));
+
+    var opt = services.AddOptions<QueuedMessageSenderOptions>();
+    if (configure is not null)
+        opt.Configure(configure);
+
+    // Базовый sender (внутренний)
+    services.TryAddSingleton<MessageSender>();
+
+    // Декоратор
+    services.TryAddSingleton<QueuedMessageSender>();
+
+    // IMessageSender -> QueuedMessageSender
+    services.Replace(ServiceDescriptor.Singleton<IMessageSender>(sp => sp.GetRequiredService<QueuedMessageSender>()));
+
+    return services;
+}
+
+    private static void MapUpdatePayloadsByConvention(UpdateHandlerRegistry reg)
+    {
+        // Ищем UpdateHandlerRegistry.Map<TPayload>(UpdateType, Func<Update, TPayload?>)
+        var mapGeneric = typeof(UpdateHandlerRegistry)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(m => m.Name == nameof(UpdateHandlerRegistry.Map))
+            .Single(m => m.IsGenericMethodDefinition && m.GetParameters().Length == 2);
+
+        var updateTypeValues = Enum.GetValues<UpdateType>();
+
+        foreach (var updateType in updateTypeValues)
+        {
+            var name = updateType.ToString();
+
+            // Ищем property на Update с таким же именем (Message, CallbackQuery, InlineQuery, ...)
+            var prop = typeof(Update).GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+            if (prop is null) continue;
+
+            var payloadType = prop.PropertyType;
+            if (!payloadType.IsClass) continue; // Map работает только для reference types
+
+            // Компилируем extractor: (Update u) => u.<Prop>
+            var u = Expression.Parameter(typeof(Update), "u");
+            var body = Expression.Property(u, prop);
+            var funcType = typeof(Func<,>).MakeGenericType(typeof(Update), payloadType);
+            var extractor = Expression.Lambda(funcType, body, u).Compile();
+
+            // Вызываем Map<TPayload>(updateType, extractor) через reflection
+            var closedMap = mapGeneric.MakeGenericMethod(payloadType);
+            closedMap.Invoke(reg, new object[] { updateType, extractor });
+        }
     }
 
     // ------------------- Command registration -------------------
@@ -101,16 +193,51 @@ public static class TelegramBotKitServiceCollectionExtensions
         if (commandType.IsAbstract || commandType.IsInterface)
             throw new ArgumentException($"{commandType.Name} must be a concrete class.", nameof(commandType));
 
-        // Регистрируем конкретный тип
+        // Регистрируем конкретный тип (инстанс будет создаваться только когда команда реально выбрана)
         services.Add(new ServiceDescriptor(commandType, commandType, lifetime));
 
-        // Регистрируем “роли” (если реализованы)
-        var roles = new[] { typeof(IMessageCommand), typeof(ICallbackCommand), typeof(ITextCommand) };
+        var hasAnyRoleAttr = false;
 
-        foreach (var role in roles)
+        var msgAttr = commandType.GetCustomAttribute<MessageCommandAttribute>();
+        if (msgAttr is not null)
         {
-            if (role.IsAssignableFrom(commandType))
-                services.Add(new ServiceDescriptor(role, sp => sp.GetRequiredService(commandType), lifetime));
+            hasAnyRoleAttr = true;
+            if (!typeof(IMessageCommand).IsAssignableFrom(commandType))
+                throw new ArgumentException($"{commandType.Name} has [MessageCommand] but does not implement IMessageCommand.", nameof(commandType));
+
+            services.AddSingleton(new MessageCommandDescriptor(msgAttr.Command, commandType));
+        }
+
+        var textAttr = commandType.GetCustomAttribute<TextCommandAttribute>();
+        if (textAttr is not null)
+        {
+            hasAnyRoleAttr = true;
+            if (!typeof(ITextCommand).IsAssignableFrom(commandType))
+                throw new ArgumentException($"{commandType.Name} has [TextCommand] but does not implement ITextCommand.", nameof(commandType));
+
+            services.AddSingleton(new TextCommandDescriptor(textAttr.Triggers, textAttr.IgnoreCase, commandType));
+        }
+
+        var cbAttr = commandType.GetCustomAttribute<CallbackCommandAttribute>();
+        if (cbAttr is not null)
+        {
+            hasAnyRoleAttr = true;
+            if (!typeof(ICallbackCommand).IsAssignableFrom(commandType))
+                throw new ArgumentException($"{commandType.Name} has [CallbackCommand] but does not implement ICallbackCommand.", nameof(commandType));
+
+            services.AddSingleton(new CallbackCommandDescriptor(cbAttr.Key, commandType));
+        }
+
+        // Если класс реализует command-интерфейсы, но атрибутов нет — мы не можем построить индекс.
+        // Это сделано специально: команда больше НЕ создаётся на каждый update.
+        if (!hasAnyRoleAttr)
+        {
+            var hasInterfaces = typeof(IMessageCommand).IsAssignableFrom(commandType)
+                || typeof(ITextCommand).IsAssignableFrom(commandType)
+                || typeof(ICallbackCommand).IsAssignableFrom(commandType);
+
+            if (hasInterfaces)
+                throw new ArgumentException($"{commandType.Name} implements command interfaces but has no command metadata attributes. Add [MessageCommand], [TextCommand] or [CallbackCommand].", nameof(commandType));
         }
 
         return services;
@@ -122,14 +249,13 @@ public static class TelegramBotKitServiceCollectionExtensions
         if (assemblies is null || assemblies.Length == 0)
             throw new ArgumentException("At least one assembly is required.", nameof(assemblies));
 
-        foreach (var t in GetTypesWithAttribute<CommandAttribute>(assemblies))
+        foreach (var t in GetTypesWithCommandAttributes(assemblies))
             services.AddCommand(t);
 
         return services;
     }
 
-    private static IEnumerable<Type> GetTypesWithAttribute<TAttribute>(params Assembly[] assemblies)
-        where TAttribute : Attribute
+    private static IEnumerable<Type> GetTypesWithCommandAttributes(params Assembly[] assemblies)
     {
         foreach (var asm in assemblies.Where(a => a is not null && !a.IsDynamic))
         {
@@ -148,8 +274,11 @@ public static class TelegramBotKitServiceCollectionExtensions
                 if (t.IsAbstract || t.IsInterface) continue;
                 if (!typeof(ICommand).IsAssignableFrom(t)) continue;
 
-                // Атрибут = маячок
-                if (t.GetCustomAttributes(typeof(TAttribute), inherit: false).Length > 0)
+                var hasRoleAttr = t.GetCustomAttributes(typeof(MessageCommandAttribute), inherit: false).Length > 0
+                    || t.GetCustomAttributes(typeof(TextCommandAttribute), inherit: false).Length > 0
+                    || t.GetCustomAttributes(typeof(CallbackCommandAttribute), inherit: false).Length > 0;
+
+                if (hasRoleAttr)
                     yield return t;
             }
         }

@@ -1,16 +1,14 @@
-﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
 using TelegramBotKit.Keyboards;
+using TelegramBotKit.Messaging;
 
 namespace TelegramBotKit.Sample.ConsolePolling.Commands;
 
-[Command]
+[MessageCommand("/start")]
 public sealed class StartCommand : IMessageCommand
 {
-    public string Command => "/start";
-
-    public async Task HandleAsync(Message message, BotContext ctx, CancellationToken ct)
+    public Task HandleAsync(Message message, BotContext ctx)
     {
         var kb = Keyboard.Inline(
         [
@@ -20,15 +18,20 @@ public sealed class StartCommand : IMessageCommand
               Keyboard.Callback("❤️ Like(123)", "like", "123") ]
         ]);
 
-        await ctx.BotClient.SendMessage(
+        return ctx.Sender.SendText(
             chatId: message.Chat.Id,
-            text: "Тест-меню:\n" +
-                  "✅ Callback — проверка callback\n" +
-                  "⏳ Wait — проверка WaitForUserResponse\n" +
-                  "🧾 Trace — проверка middleware Items\n" +
-                  "❤️ Like — callback с аргументом\n\n" +
-                  "Также есть текст-триггер: напиши 'echo'",
-            replyMarkup: kb,
-            cancellationToken: ct);
+            msg: new SendText
+            {
+                Text =
+                    "Тест-меню:\n" +
+                    "✅ Callback — проверка callback\n" +
+                    "⏳ Wait — проверка WaitForUserResponse\n" +
+                    "🧾 Trace — проверка middleware Items\n" +
+                    "❤️ Like — callback с аргументом\n\n" +
+                    "Команда: /photo — фото + кнопки\n" +
+                    "Также есть текст-триггер: напиши 'echo'",
+                ReplyMarkup = kb
+            },
+            ct: ctx.CancellationToken);
     }
 }

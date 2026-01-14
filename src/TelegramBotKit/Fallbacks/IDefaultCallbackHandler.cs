@@ -7,5 +7,5 @@ namespace TelegramBotKit.Fallbacks;
 /// </summary>
 public interface IDefaultCallbackHandler
 {
-    Task HandleAsync(CallbackQuery query, BotContext ctx, CancellationToken ct);
+    Task HandleAsync(CallbackQuery query, BotContext ctx);
 }

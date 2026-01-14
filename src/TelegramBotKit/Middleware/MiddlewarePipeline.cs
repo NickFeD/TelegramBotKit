@@ -10,7 +10,7 @@ public delegate Task BotContextDelegate(BotContext ctx);
 /// <summary>
 /// Статичный пайплайн middleware
 /// </summary>
-public sealed class MiddlewarePipeline
+internal sealed class MiddlewarePipeline
 {
     private readonly IServiceProvider _rootServices;
     private readonly Type[] _middlewareTypes;
