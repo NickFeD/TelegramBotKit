@@ -254,6 +254,101 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         return services;
     }
 
+
+    /// <summary>
+    /// Registers a slash-message command (e.g. "/start") without assembly scanning (AOT-friendly).
+    /// The command instance is resolved from the per-update scope (<see cref="BotContext.Services"/>).
+    /// </summary>
+    /// <typeparam name="TCommand">Concrete command type.</typeparam>
+    /// <param name="services">Service collection.</param>
+    /// <param name="command">Slash command ("/start").</param>
+    /// <param name="lifetime">DI lifetime for the command type. Defaults to Transient.</param>
+    public static IServiceCollection AddMessageCommand<TCommand>(
+        this IServiceCollection services,
+        string command,
+        ServiceLifetime lifetime = ServiceLifetime.Transient)
+        where TCommand : class, IMessageCommand
+    {
+        if (services is null) throw new ArgumentNullException(nameof(services));
+        if (string.IsNullOrWhiteSpace(command)) throw new ArgumentException("Command is required.", nameof(command));
+
+        services.Add(new ServiceDescriptor(typeof(TCommand), typeof(TCommand), lifetime));
+
+        services.AddSingleton(new MessageCommandDescriptor(
+            command,
+            static (message, ctx) =>
+            {
+                var handler = ctx.Services.GetRequiredService<TCommand>();
+                return new ValueTask(handler.HandleAsync(message, ctx));
+            }));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers an exact text-trigger command without assembly scanning (AOT-friendly).
+    /// The command instance is resolved from the per-update scope (<see cref="BotContext.Services"/>).
+    /// </summary>
+    /// <typeparam name="TCommand">Concrete command type.</typeparam>
+    /// <param name="services">Service collection.</param>
+    /// <param name="triggers">Text triggers (exact match).</param>
+    /// <param name="ignoreCase">Whether triggers should match ignoring case.</param>
+    /// <param name="lifetime">DI lifetime for the command type. Defaults to Transient.</param>
+    public static IServiceCollection AddTextCommand<TCommand>(
+        this IServiceCollection services,
+        IReadOnlyList<string> triggers,
+        bool ignoreCase = false,
+        ServiceLifetime lifetime = ServiceLifetime.Transient)
+        where TCommand : class, ITextCommand
+    {
+        if (services is null) throw new ArgumentNullException(nameof(services));
+        if (triggers is null) throw new ArgumentNullException(nameof(triggers));
+        if (triggers.Count == 0) throw new ArgumentException("At least one trigger is required.", nameof(triggers));
+
+        services.Add(new ServiceDescriptor(typeof(TCommand), typeof(TCommand), lifetime));
+
+        services.AddSingleton(new TextCommandDescriptor(
+            triggers,
+            ignoreCase,
+            static (message, ctx) =>
+            {
+                var handler = ctx.Services.GetRequiredService<TCommand>();
+                return new ValueTask(handler.HandleAsync(message, ctx));
+            }));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers a callback command without assembly scanning (AOT-friendly).
+    /// The command instance is resolved from the per-update scope (<see cref="BotContext.Services"/>).
+    /// </summary>
+    /// <typeparam name="TCommand">Concrete command type.</typeparam>
+    /// <param name="services">Service collection.</param>
+    /// <param name="key">Callback key.</param>
+    /// <param name="lifetime">DI lifetime for the command type. Defaults to Transient.</param>
+    public static IServiceCollection AddCallbackCommand<TCommand>(
+        this IServiceCollection services,
+        string key,
+        ServiceLifetime lifetime = ServiceLifetime.Transient)
+        where TCommand : class, ICallbackCommand
+    {
+        if (services is null) throw new ArgumentNullException(nameof(services));
+        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("Key is required.", nameof(key));
+
+        services.Add(new ServiceDescriptor(typeof(TCommand), typeof(TCommand), lifetime));
+
+        services.AddSingleton(new CallbackCommandDescriptor(
+            key,
+            static (query, args, ctx) =>
+            {
+                var handler = ctx.Services.GetRequiredService<TCommand>();
+                return new ValueTask(handler.HandleAsync(query, args, ctx));
+            }));
+
+        return services;
+    }
+
     private static IEnumerable<Type> GetTypesWithCommandAttributes(params Assembly[] assemblies)
     {
         foreach (var asm in assemblies.Where(a => a is not null && !a.IsDynamic))
