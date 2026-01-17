@@ -7,8 +7,17 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
+    <PackageId>TelegramBotKit.Routing</PackageId>
+    <Description>Optional routing sugar for TelegramBotKit (ASP.NET-style Use* methods).</Description>
+    <PackageTags>telegram;bot;telegram-bot;dotnet;routing</PackageTags>
+    <!-- keep in sync with TelegramBotKit package -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TelegramBotKit\TelegramBotKit.csproj" />
+  </ItemGroup>
 
 
 </Project>

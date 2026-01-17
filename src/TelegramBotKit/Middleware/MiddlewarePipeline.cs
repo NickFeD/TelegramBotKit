@@ -1,5 +1,3 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-
 namespace TelegramBotKit.Middleware;
 
 /// <summary>
@@ -10,29 +8,25 @@ public delegate Task BotContextDelegate(BotContext ctx);
 internal sealed class MiddlewarePipeline
 {
     private readonly IServiceProvider _rootServices;
-    private readonly Type[] _middlewareTypes;
+    private readonly Func<IServiceProvider, IUpdateMiddleware>[] _middlewareFactories;
 
-    public MiddlewarePipeline(IServiceProvider rootServices, IEnumerable<Type> middlewareTypes)
+    public MiddlewarePipeline(
+        IServiceProvider rootServices,
+        IEnumerable<Func<IServiceProvider, IUpdateMiddleware>> middlewareFactories)
     {
         _rootServices = rootServices ?? throw new ArgumentNullException(nameof(rootServices));
-        _middlewareTypes = (middlewareTypes ?? Array.Empty<Type>()).ToArray();
-
-        for (int i = 0; i < _middlewareTypes.Length; i++)
-        {
-            var t = _middlewareTypes[i];
-            if (!typeof(IUpdateMiddleware).IsAssignableFrom(t))
-                throw new ArgumentException($"Middleware type must implement IUpdateMiddleware: {t.FullName}");
-        }
+        _middlewareFactories = (middlewareFactories ?? Array.Empty<Func<IServiceProvider, IUpdateMiddleware>>()).ToArray();
     }
 
     public BotContextDelegate Build(BotContextDelegate terminal)
     {
         if (terminal is null) throw new ArgumentNullException(nameof(terminal));
 
-        var middlewares = new IUpdateMiddleware[_middlewareTypes.Length];
-        for (int i = 0; i < _middlewareTypes.Length; i++)
+        var middlewares = new IUpdateMiddleware[_middlewareFactories.Length];
+        for (int i = 0; i < _middlewareFactories.Length; i++)
         {
-            middlewares[i] = (IUpdateMiddleware)ActivatorUtilities.CreateInstance(_rootServices, _middlewareTypes[i]);
+            var mw = _middlewareFactories[i](_rootServices);
+            middlewares[i] = mw ?? throw new InvalidOperationException("Middleware factory returned null.");
         }
 
         BotContextDelegate app = terminal;

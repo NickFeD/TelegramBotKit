@@ -63,7 +63,7 @@ public static class TelegramBotKitServiceCollectionExtensions
 
         var builder = new TelegramBotKitBuilder(services);
 
-        services.AddSingleton(sp => new MiddlewarePipeline(sp, builder.MiddlewareTypes));
+        services.AddSingleton(sp => new MiddlewarePipeline(sp, builder.MiddlewareFactories));
 
         services.AddSingleton<UpdateHandlerRegistry>(sp =>
         {
@@ -184,7 +184,13 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
             if (!typeof(IMessageCommand).IsAssignableFrom(commandType))
                 throw new ArgumentException($"{commandType.Name} has [MessageCommand] but does not implement IMessageCommand.", nameof(commandType));
 
-            services.AddSingleton(new MessageCommandDescriptor(msgAttr.Command, commandType));
+            services.AddSingleton(new MessageCommandDescriptor(
+                msgAttr.Command,
+                (message, ctx) =>
+                {
+                    var handler = (IMessageCommand)ctx.Services.GetRequiredService(commandType);
+                    return new ValueTask(handler.HandleAsync(message, ctx));
+                }));
         }
 
         var textAttr = commandType.GetCustomAttribute<TextCommandAttribute>();
@@ -194,7 +200,14 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
             if (!typeof(ITextCommand).IsAssignableFrom(commandType))
                 throw new ArgumentException($"{commandType.Name} has [TextCommand] but does not implement ITextCommand.", nameof(commandType));
 
-            services.AddSingleton(new TextCommandDescriptor(textAttr.Triggers, textAttr.IgnoreCase, commandType));
+            services.AddSingleton(new TextCommandDescriptor(
+                textAttr.Triggers,
+                textAttr.IgnoreCase,
+                (message, ctx) =>
+                {
+                    var handler = (ITextCommand)ctx.Services.GetRequiredService(commandType);
+                    return new ValueTask(handler.HandleAsync(message, ctx));
+                }));
         }
 
         var cbAttr = commandType.GetCustomAttribute<CallbackCommandAttribute>();
@@ -204,7 +217,13 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
             if (!typeof(ICallbackCommand).IsAssignableFrom(commandType))
                 throw new ArgumentException($"{commandType.Name} has [CallbackCommand] but does not implement ICallbackCommand.", nameof(commandType));
 
-            services.AddSingleton(new CallbackCommandDescriptor(cbAttr.Key, commandType));
+            services.AddSingleton(new CallbackCommandDescriptor(
+                cbAttr.Key,
+                (query, args, ctx) =>
+                {
+                    var handler = (ICallbackCommand)ctx.Services.GetRequiredService(commandType);
+                    return new ValueTask(handler.HandleAsync(query, args, ctx));
+                }));
         }
 
         if (!hasAnyRoleAttr)

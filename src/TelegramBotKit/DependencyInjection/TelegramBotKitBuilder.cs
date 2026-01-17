@@ -14,10 +14,10 @@ namespace TelegramBotKit.DependencyInjection;
 /// </summary>
 public sealed class TelegramBotKitBuilder
 {
-    private readonly List<Type> _middlewareTypes = new();
+    private readonly List<Func<IServiceProvider, IUpdateMiddleware>> _middlewareFactories = new();
     private readonly List<Action<UpdateHandlerRegistry>> _registryActions = new();
 
-    internal IReadOnlyList<Type> MiddlewareTypes => _middlewareTypes;
+    internal IReadOnlyList<Func<IServiceProvider, IUpdateMiddleware>> MiddlewareFactories => _middlewareFactories;
     internal IReadOnlyList<Action<UpdateHandlerRegistry>> RegistryActions => _registryActions;
     internal TelegramBotKitBuilder(IServiceCollection services) => Services = services;
 
@@ -33,7 +33,18 @@ public sealed class TelegramBotKitBuilder
     public TelegramBotKitBuilder UseMiddleware<TMiddleware>()
         where TMiddleware : class, IUpdateMiddleware
     {
-        _middlewareTypes.Add(typeof(TMiddleware));
+        _middlewareFactories.Add(sp => (IUpdateMiddleware)ActivatorUtilities.CreateInstance(sp, typeof(TMiddleware)));
+        return this;
+    }
+
+    /// <summary>
+    /// Adds an inline middleware (ASP.NET-style).
+    /// </summary>
+    public TelegramBotKitBuilder UseMiddleware(Func<BotContext, BotContextDelegate, Task> middleware)
+    {
+        if (middleware is null) throw new ArgumentNullException(nameof(middleware));
+
+        _middlewareFactories.Add(_ => new InlineUpdateMiddleware(middleware));
         return this;
     }
 

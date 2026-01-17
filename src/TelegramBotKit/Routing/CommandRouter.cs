@@ -1,4 +1,3 @@
-﻿using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
 
@@ -7,12 +6,10 @@ namespace TelegramBotKit.Routing;
 internal sealed class CommandRouter
 {
     private readonly CommandRegistry _registry;
-    private readonly IServiceProvider _services;
 
-    public CommandRouter(CommandRegistry registry, IServiceProvider services)
+    public CommandRouter(CommandRegistry registry)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _services = services ?? throw new ArgumentNullException(nameof(services));
     }
 
     public async Task<bool> TryRouteMessageAsync(Message message, BotContext ctx)
@@ -31,19 +28,17 @@ internal sealed class CommandRouter
             if (cmd is null)
                 return false;
 
-            if (!_registry.TryGetMessageCommand(cmd, out var commandType))
+            if (!_registry.TryGetMessageCommand(cmd, out var invoker))
                 return false;
 
-            var handler = (IMessageCommand)_services.GetRequiredService(commandType);
-            await handler.HandleAsync(message, ctx).ConfigureAwait(false);
+            await invoker(message, ctx).ConfigureAwait(false);
             return true;
         }
 
-        if (!_registry.TryGetTextCommand(text, out var textCommandType))
+        if (!_registry.TryGetTextCommand(text, out var textInvoker))
             return false;
 
-        var bestHandler = (ITextCommand)_services.GetRequiredService(textCommandType);
-        await bestHandler.HandleAsync(message, ctx).ConfigureAwait(false);
+        await textInvoker(message, ctx).ConfigureAwait(false);
         return true;
     }
 
@@ -58,11 +53,10 @@ internal sealed class CommandRouter
         if (!TryParseCallbackData(data, out var key, out var args))
             return false;
 
-        if (!_registry.TryGetCallbackCommand(key, out var commandType))
+        if (!_registry.TryGetCallbackCommand(key, out var invoker))
             return false;
 
-        var handler = (ICallbackCommand)_services.GetRequiredService(commandType);
-        await handler.HandleAsync(query, args, ctx).ConfigureAwait(false);
+        await invoker(query, args, ctx).ConfigureAwait(false);
         return true;
     }
 

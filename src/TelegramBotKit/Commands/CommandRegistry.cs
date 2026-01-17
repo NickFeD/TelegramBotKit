@@ -1,11 +1,21 @@
+using Telegram.Bot.Types;
+
 namespace TelegramBotKit.Commands;
+
+// NOTE: These delegates are internal by design.
+// They give us an AOT-friendly seam:
+// - today invokers may resolve handlers by Type (reflection-based scanning)
+// - tomorrow a source-generator can emit invokers that resolve via generics (no reflection)
+internal delegate ValueTask MessageCommandInvoker(Message message, BotContext ctx);
+internal delegate ValueTask TextCommandInvoker(Message message, BotContext ctx);
+internal delegate ValueTask CallbackCommandInvoker(CallbackQuery query, string[] args, BotContext ctx);
 
 internal sealed class CommandRegistry
 {
-    private readonly IReadOnlyDictionary<string, Type> _messageBySlash;
-    private readonly IReadOnlyDictionary<string, Type> _callbackByKey;
-    private readonly IReadOnlyDictionary<string, Type> _textExact;
-    private readonly IReadOnlyDictionary<string, Type> _textIgnoreCase;
+    private readonly IReadOnlyDictionary<string, MessageCommandInvoker> _messageBySlash;
+    private readonly IReadOnlyDictionary<string, CallbackCommandInvoker> _callbackByKey;
+    private readonly IReadOnlyDictionary<string, TextCommandInvoker> _textExact;
+    private readonly IReadOnlyDictionary<string, TextCommandInvoker> _textIgnoreCase;
 
     public CommandRegistry(
         IEnumerable<MessageCommandDescriptor> messageDescriptors,
@@ -16,27 +26,27 @@ internal sealed class CommandRegistry
         if (textDescriptors is null) throw new ArgumentNullException(nameof(textDescriptors));
         if (callbackDescriptors is null) throw new ArgumentNullException(nameof(callbackDescriptors));
 
-        var msg = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
+        var msg = new Dictionary<string, MessageCommandInvoker>(StringComparer.OrdinalIgnoreCase);
         foreach (var d in messageDescriptors)
         {
             var key = NormalizeSlash(d.Command);
-            if (!msg.TryAdd(key, d.CommandType))
+            if (!msg.TryAdd(key, d.Invoker))
                 throw new InvalidOperationException($"Duplicate message command: '{key}'");
         }
 
-        var cb = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
+        var cb = new Dictionary<string, CallbackCommandInvoker>(StringComparer.OrdinalIgnoreCase);
         foreach (var d in callbackDescriptors)
         {
             var key = d.Key.Trim();
-            if (!cb.TryAdd(key, d.CommandType))
+            if (!cb.TryAdd(key, d.Invoker))
                 throw new InvalidOperationException($"Duplicate callback command: '{key}'");
         }
 
         _messageBySlash = msg;
         _callbackByKey = cb;
 
-        var textExact = new Dictionary<string, Type>(StringComparer.Ordinal);
-        var textIgnore = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
+        var textExact = new Dictionary<string, TextCommandInvoker>(StringComparer.Ordinal);
+        var textIgnore = new Dictionary<string, TextCommandInvoker>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var d in textDescriptors)
         {
@@ -48,12 +58,12 @@ internal sealed class CommandRegistry
 
                 if (d.IgnoreCase)
                 {
-                    if (!textIgnore.TryAdd(trig, d.CommandType))
+                    if (!textIgnore.TryAdd(trig, d.Invoker))
                         throw new InvalidOperationException($"Duplicate text trigger (ignoreCase): '{trig}'");
                 }
                 else
                 {
-                    if (!textExact.TryAdd(trig, d.CommandType))
+                    if (!textExact.TryAdd(trig, d.Invoker))
                         throw new InvalidOperationException($"Duplicate text trigger: '{trig}'");
                 }
             }
@@ -69,26 +79,26 @@ internal sealed class CommandRegistry
         _textIgnoreCase = textIgnore;
     }
 
-    public bool TryGetMessageCommand(string slash, out Type commandType)
-        => _messageBySlash.TryGetValue(NormalizeSlash(slash), out commandType!);
+    public bool TryGetMessageCommand(string slash, out MessageCommandInvoker invoker)
+        => _messageBySlash.TryGetValue(NormalizeSlash(slash), out invoker!);
 
-    public bool TryGetCallbackCommand(string key, out Type commandType)
-        => _callbackByKey.TryGetValue(key.Trim(), out commandType!);
+    public bool TryGetCallbackCommand(string key, out CallbackCommandInvoker invoker)
+        => _callbackByKey.TryGetValue(key.Trim(), out invoker!);
 
-    public bool TryGetTextCommand(string text, out Type commandType)
+    public bool TryGetTextCommand(string text, out TextCommandInvoker invoker)
     {
         text = (text ?? string.Empty).Trim();
 
         if (string.IsNullOrEmpty(text))
         {
-            commandType = null!;
+            invoker = null!;
             return false;
         }
 
-        if (_textExact.TryGetValue(text, out commandType!))
+        if (_textExact.TryGetValue(text, out invoker!))
             return true;
 
-        return _textIgnoreCase.TryGetValue(text, out commandType!);
+        return _textIgnoreCase.TryGetValue(text, out invoker!);
     }
 
     public static string NormalizeSlash(string cmd)
@@ -109,8 +119,8 @@ internal sealed class CommandRegistry
     }
 }
 
-internal sealed record MessageCommandDescriptor(string Command, Type CommandType);
+internal sealed record MessageCommandDescriptor(string Command, MessageCommandInvoker Invoker);
 
-internal sealed record TextCommandDescriptor(IReadOnlyList<string> Triggers, bool IgnoreCase, Type CommandType);
+internal sealed record TextCommandDescriptor(IReadOnlyList<string> Triggers, bool IgnoreCase, TextCommandInvoker Invoker);
 
-internal sealed record CallbackCommandDescriptor(string Key, Type CommandType);
+internal sealed record CallbackCommandDescriptor(string Key, CallbackCommandInvoker Invoker);
