@@ -1,8 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using TelegramBotKit.Commands;
 using TelegramBotKit.Dispatching;
 using TelegramBotKit.Messaging;
 using TelegramBotKit.Middleware;
@@ -47,35 +45,6 @@ public sealed class TelegramBotKitBuilder
         _middlewareFactories.Add(_ => new InlineUpdateMiddleware(middleware));
         return this;
     }
-
-    /// <summary>
-    /// Adds the command.
-    /// </summary>
-    public TelegramBotKitBuilder AddCommand<TCommand>(ServiceLifetime lifetime = ServiceLifetime.Transient)
-        where TCommand : class, ICommand
-    {
-        Services.AddCommand(typeof(TCommand), lifetime);
-        return this;
-    }
-
-    /// <summary>
-    /// Adds the commands from assembly.
-    /// </summary>
-    public TelegramBotKitBuilder AddCommandsFromAssembly<TMarker>()
-    {
-        Services.AddCommandsFromAssemblies(typeof(TMarker).Assembly);
-        return this;
-    }
-
-    /// <summary>
-    /// Adds the commands from assemblies.
-    /// </summary>
-    public TelegramBotKitBuilder AddCommandsFromAssemblies(params Assembly[] assemblies)
-    {
-        Services.AddCommandsFromAssemblies(assemblies);
-        return this;
-    }
-
     /// <summary>
     /// Adds the update handler.
     /// </summary>

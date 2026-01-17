@@ -3,7 +3,9 @@
     <Project Path="samples/TelegramBotKit.Sample.ConsolePolling/TelegramBotKit.Sample.ConsolePolling.csproj" Id="586e863b-354c-4709-8fd1-2262e08b373d" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/TelegramBotKit.Generators/TelegramBotKit.Generators.csproj" />
     <Project Path="src/TelegramBotKit.Hosting/TelegramBotKit.Hosting.csproj" Id="346c30a5-68ab-42f7-8abb-e1f3c010d15f" />
+    <Project Path="src/TelegramBotKit.Routing/TelegramBotKit.Routing.csproj" />
     <Project Path="src/TelegramBotKit/TelegramBotKit.csproj" Id="b4ebd1b4-f422-498c-8fec-9ef8c8713ed2" />
   </Folder>
   <Folder Name="/Элементы решения/">

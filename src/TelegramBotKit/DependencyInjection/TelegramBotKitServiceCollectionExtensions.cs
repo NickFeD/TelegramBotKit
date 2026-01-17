@@ -1,7 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using System.Linq.Expressions;
 using System.Reflection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -22,7 +21,7 @@ namespace TelegramBotKit.DependencyInjection;
 /// <summary>
 /// Provides a telegram bot kit service collection extensions.
 /// </summary>
-public static class TelegramBotKitServiceCollectionExtensions
+public static partial class TelegramBotKitServiceCollectionExtensions
 {
     /// <summary>
     /// Adds the telegram bot kit.
@@ -69,7 +68,7 @@ public static class TelegramBotKitServiceCollectionExtensions
         {
             var reg = new UpdateHandlerRegistry();
 
-            MapUpdatePayloadsByConvention(reg);
+            MapDefaultUpdatePayloads(reg);
 
             foreach (var add in builder.RegistryActions)
                 add(reg);
@@ -122,137 +121,14 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     return services;
 }
 
-    private static void MapUpdatePayloadsByConvention(UpdateHandlerRegistry reg)
+    private static void MapDefaultUpdatePayloads(UpdateHandlerRegistry reg)
     {
-        var mapGeneric = typeof(UpdateHandlerRegistry)
-            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Where(m => m.Name == nameof(UpdateHandlerRegistry.Map))
-            .Single(m => m.IsGenericMethodDefinition && m.GetParameters().Length == 2);
-
-        var updateTypeValues = Enum.GetValues<UpdateType>();
-
-        foreach (var updateType in updateTypeValues)
-        {
-            var name = updateType.ToString();
-
-            var prop = typeof(Update).GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
-            if (prop is null) continue;
-
-            var payloadType = prop.PropertyType;
-            if (!payloadType.IsClass) continue;
-
-            var u = Expression.Parameter(typeof(Update), "u");
-            var body = Expression.Property(u, prop);
-            var funcType = typeof(Func<,>).MakeGenericType(typeof(Update), payloadType);
-            var extractor = Expression.Lambda(funcType, body, u).Compile();
-
-            var closedMap = mapGeneric.MakeGenericMethod(payloadType);
-            closedMap.Invoke(reg, new object[] { updateType, extractor });
-        }
+        // Minimal defaults that cover the built-in handlers registered by AddTelegramBotKit.
+        // Additional payloads can be mapped via TelegramBotKitBuilder.Map(...).
+        reg.Map<Message>(UpdateType.Message, static u => u.Message);
+        reg.Map<CallbackQuery>(UpdateType.CallbackQuery, static u => u.CallbackQuery);
     }
 
-
-    /// <summary>
-    /// Adds the command.
-    /// </summary>
-    public static IServiceCollection AddCommand<TCommand>(this IServiceCollection services, ServiceLifetime lifetime = ServiceLifetime.Transient)
-        where TCommand : class, ICommand
-        => services.AddCommand(typeof(TCommand), lifetime);
-
-    /// <summary>
-    /// Adds the command.
-    /// </summary>
-    public static IServiceCollection AddCommand(this IServiceCollection services, Type commandType, ServiceLifetime lifetime = ServiceLifetime.Transient)
-    {
-        if (services is null) throw new ArgumentNullException(nameof(services));
-        if (commandType is null) throw new ArgumentNullException(nameof(commandType));
-
-        if (!typeof(ICommand).IsAssignableFrom(commandType))
-            throw new ArgumentException($"{commandType.Name} does not implement ICommand.", nameof(commandType));
-
-        if (commandType.IsAbstract || commandType.IsInterface)
-            throw new ArgumentException($"{commandType.Name} must be a concrete class.", nameof(commandType));
-
-        services.Add(new ServiceDescriptor(commandType, commandType, lifetime));
-
-        var hasAnyRoleAttr = false;
-
-        var msgAttr = commandType.GetCustomAttribute<MessageCommandAttribute>();
-        if (msgAttr is not null)
-        {
-            hasAnyRoleAttr = true;
-            if (!typeof(IMessageCommand).IsAssignableFrom(commandType))
-                throw new ArgumentException($"{commandType.Name} has [MessageCommand] but does not implement IMessageCommand.", nameof(commandType));
-
-            services.AddSingleton(new MessageCommandDescriptor(
-                msgAttr.Command,
-                (message, ctx) =>
-                {
-                    var handler = (IMessageCommand)ctx.Services.GetRequiredService(commandType);
-                    return new ValueTask(handler.HandleAsync(message, ctx));
-                }));
-        }
-
-        var textAttr = commandType.GetCustomAttribute<TextCommandAttribute>();
-        if (textAttr is not null)
-        {
-            hasAnyRoleAttr = true;
-            if (!typeof(ITextCommand).IsAssignableFrom(commandType))
-                throw new ArgumentException($"{commandType.Name} has [TextCommand] but does not implement ITextCommand.", nameof(commandType));
-
-            services.AddSingleton(new TextCommandDescriptor(
-                textAttr.Triggers,
-                textAttr.IgnoreCase,
-                (message, ctx) =>
-                {
-                    var handler = (ITextCommand)ctx.Services.GetRequiredService(commandType);
-                    return new ValueTask(handler.HandleAsync(message, ctx));
-                }));
-        }
-
-        var cbAttr = commandType.GetCustomAttribute<CallbackCommandAttribute>();
-        if (cbAttr is not null)
-        {
-            hasAnyRoleAttr = true;
-            if (!typeof(ICallbackCommand).IsAssignableFrom(commandType))
-                throw new ArgumentException($"{commandType.Name} has [CallbackCommand] but does not implement ICallbackCommand.", nameof(commandType));
-
-            services.AddSingleton(new CallbackCommandDescriptor(
-                cbAttr.Key,
-                (query, args, ctx) =>
-                {
-                    var handler = (ICallbackCommand)ctx.Services.GetRequiredService(commandType);
-                    return new ValueTask(handler.HandleAsync(query, args, ctx));
-                }));
-        }
-
-        if (!hasAnyRoleAttr)
-        {
-            var hasInterfaces = typeof(IMessageCommand).IsAssignableFrom(commandType)
-                || typeof(ITextCommand).IsAssignableFrom(commandType)
-                || typeof(ICallbackCommand).IsAssignableFrom(commandType);
-
-            if (hasInterfaces)
-                throw new ArgumentException($"{commandType.Name} implements command interfaces but has no command metadata attributes. Add [MessageCommand], [TextCommand] or [CallbackCommand].", nameof(commandType));
-        }
-
-        return services;
-    }
-
-    /// <summary>
-    /// Adds the commands from assemblies.
-    /// </summary>
-    public static IServiceCollection AddCommandsFromAssemblies(this IServiceCollection services, params Assembly[] assemblies)
-    {
-        if (services is null) throw new ArgumentNullException(nameof(services));
-        if (assemblies is null || assemblies.Length == 0)
-            throw new ArgumentException("At least one assembly is required.", nameof(assemblies));
-
-        foreach (var t in GetTypesWithCommandAttributes(assemblies))
-            services.AddCommand(t);
-
-        return services;
-    }
 
 
     /// <summary>
@@ -261,8 +137,8 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     /// </summary>
     /// <typeparam name="TCommand">Concrete command type.</typeparam>
     /// <param name="services">Service collection.</param>
-    /// <param name="command">Slash command ("/start").</param>
-    /// <param name="lifetime">DI lifetime for the command type. Defaults to Transient.</param>
+    /// <param name="command">Slash command string ("/start").</param>
+    /// <param name="lifetime">DI lifetime for the command type. Defaults to <see cref="ServiceLifetime.Transient"/>.</param>
     public static IServiceCollection AddMessageCommand<TCommand>(
         this IServiceCollection services,
         string command,
@@ -293,11 +169,11 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     /// <param name="services">Service collection.</param>
     /// <param name="triggers">Text triggers (exact match).</param>
     /// <param name="ignoreCase">Whether triggers should match ignoring case.</param>
-    /// <param name="lifetime">DI lifetime for the command type. Defaults to Transient.</param>
+    /// <param name="lifetime">DI lifetime for the command type. Defaults to <see cref="ServiceLifetime.Transient"/>.</param>
     public static IServiceCollection AddTextCommand<TCommand>(
         this IServiceCollection services,
         IReadOnlyList<string> triggers,
-        bool ignoreCase = false,
+        bool ignoreCase = true,
         ServiceLifetime lifetime = ServiceLifetime.Transient)
         where TCommand : class, ITextCommand
     {
@@ -326,7 +202,7 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
     /// <typeparam name="TCommand">Concrete command type.</typeparam>
     /// <param name="services">Service collection.</param>
     /// <param name="key">Callback key.</param>
-    /// <param name="lifetime">DI lifetime for the command type. Defaults to Transient.</param>
+    /// <param name="lifetime">DI lifetime for the command type. Defaults to <see cref="ServiceLifetime.Transient"/>.</param>
     public static IServiceCollection AddCallbackCommand<TCommand>(
         this IServiceCollection services,
         string key,
@@ -349,9 +225,64 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         return services;
     }
 
+    /// <summary>
+    /// Registers all TelegramBotKit commands.
+    /// If generated registrations are available (TelegramBotKit.Generators installed), uses them.
+    /// Otherwise falls back to reflection-based discovery.
+    /// </summary>
+    /// <param name="services">Service collection.</param>
+    /// <param name="fallbackToReflection">
+    /// If false, throws when no generated registrations are present.
+    /// Use false for NativeAOT/trim-safe builds.
+    /// </param>
+    public static IServiceCollection AddCommands(this IServiceCollection services, bool fallbackToReflection = true)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        // 1) Prefer generated registrations (no reflection)
+        if (TelegramBotKitGeneratedCommandsHook.TryRun(services))
+            return services;
+
+        // 2) Fallback to reflection discovery
+        if (!fallbackToReflection)
+            throw new InvalidOperationException(
+                "No generated command registrations found. Install TelegramBotKit.Generators or enable reflection fallback.");
+
+        return AddCommandsByReflection(services);
+    }
+
+    private static IServiceCollection AddCommandsByReflection(IServiceCollection services)
+    {
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a is not null && !a.IsDynamic)
+            .Where(ReferencesTelegramBotKit)
+            .ToArray();
+
+        foreach (var t in GetTypesWithCommandAttributes(assemblies))
+            AddCommandByType(services, t);
+
+        return services;
+    }
+
+    private static bool ReferencesTelegramBotKit(Assembly asm)
+    {
+        var name = asm.GetName().Name;
+        if (string.Equals(name, "TelegramBotKit", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        try
+        {
+            return asm.GetReferencedAssemblies().Any(r => string.Equals(r.Name, "TelegramBotKit", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static IEnumerable<Type> GetTypesWithCommandAttributes(params Assembly[] assemblies)
     {
-        foreach (var asm in assemblies.Where(a => a is not null && !a.IsDynamic))
+        foreach (var asm in assemblies)
         {
             Type[] types;
             try
@@ -365,6 +296,7 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
 
             foreach (var t in types)
             {
+                if (t is null) continue;
                 if (t.IsAbstract || t.IsInterface) continue;
                 if (!typeof(ICommand).IsAssignableFrom(t)) continue;
 
@@ -375,6 +307,48 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
                 if (hasRoleAttr)
                     yield return t;
             }
+        }
+    }
+
+    private static void AddCommandByType(IServiceCollection services, Type commandType, ServiceLifetime lifetime = ServiceLifetime.Transient)
+    {
+        services.Add(new ServiceDescriptor(commandType, commandType, lifetime));
+
+        var msgAttr = commandType.GetCustomAttribute<MessageCommandAttribute>();
+        if (msgAttr is not null && typeof(IMessageCommand).IsAssignableFrom(commandType))
+        {
+            services.AddSingleton(new MessageCommandDescriptor(
+                msgAttr.Command,
+                (message, ctx) =>
+                {
+                    var handler = (IMessageCommand)ctx.Services.GetRequiredService(commandType);
+                    return new ValueTask(handler.HandleAsync(message, ctx));
+                }));
+        }
+
+        var textAttr = commandType.GetCustomAttribute<TextCommandAttribute>();
+        if (textAttr is not null && typeof(ITextCommand).IsAssignableFrom(commandType))
+        {
+            services.AddSingleton(new TextCommandDescriptor(
+                textAttr.Triggers,
+                textAttr.IgnoreCase,
+                (message, ctx) =>
+                {
+                    var handler = (ITextCommand)ctx.Services.GetRequiredService(commandType);
+                    return new ValueTask(handler.HandleAsync(message, ctx));
+                }));
+        }
+
+        var cbAttr = commandType.GetCustomAttribute<CallbackCommandAttribute>();
+        if (cbAttr is not null && typeof(ICallbackCommand).IsAssignableFrom(commandType))
+        {
+            services.AddSingleton(new CallbackCommandDescriptor(
+                cbAttr.Key,
+                (query, args, ctx) =>
+                {
+                    var handler = (ICallbackCommand)ctx.Services.GetRequiredService(commandType);
+                    return new ValueTask(handler.HandleAsync(query, args, ctx));
+                }));
         }
     }
 }

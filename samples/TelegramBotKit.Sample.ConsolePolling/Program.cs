@@ -1,4 +1,3 @@
-﻿using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -16,7 +15,7 @@ var bot = builder.Services.AddTelegramBotKit(opt =>
     builder.Configuration.GetSection("TelegramBotKit").Bind(opt);
 });
 
-builder.Services.AddCommandsFromAssemblies(Assembly.GetExecutingAssembly());
+builder.Services.AddCommands();
 
 builder.Services.AddSingleton<IDefaultMessageHandler, SampleDefaultHandlers>();
 builder.Services.AddSingleton<IDefaultCallbackHandler, SampleDefaultHandlers>();
