@@ -24,10 +24,6 @@
   
   <ItemGroup>
     <None Include="Keyboards\Keyboard.PagedInline.cs" />
-    <None Include="README.md">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
   </ItemGroup>
   
   <ItemGroup>
