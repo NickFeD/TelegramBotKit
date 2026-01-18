@@ -1,9 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>TelegramBotKit.Generators</PackageId>
+    <Description>Roslyn source generator for TelegramBotKit that generates AddCommands() registrations at compile time.</Description>
+    <PackageTags>telegram;telegram-bot;bot;source-generator;analyzer;dotnet</PackageTags>
+    <PackageType>Analyzer</PackageType>
 
     <!-- Analyzer projects don't need XML docs; keeps CS1591 from breaking builds when warnings-as-errors is enabled. -->
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
@@ -20,4 +27,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
   </ItemGroup>
+
+  <!-- Pack the analyzer output into the analyzers folder -->
+  <ItemGroup>
+    <None Include="$(TargetDir)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="$(TargetDir)$(AssemblyName).pdb" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+  </ItemGroup>
+
 </Project>

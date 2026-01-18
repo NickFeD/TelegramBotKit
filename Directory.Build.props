@@ -1,23 +1,49 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
+    <!-- Shared NuGet metadata for all packable projects -->
+    <Version>0.3.0</Version>
+
     <Authors>NickFeD</Authors>
     <Company>NickFeD</Company>
 
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
-    
-    <!-- Символы (удобно дебажить пользователям) -->
+    <PackageProjectUrl>https://github.com/NickFeD/TelegramBotKit</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/NickFeD/TelegramBotKit</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- Helps SourceLink consumers -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <!-- NuGet UI -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
-    <!-- XML docs for consumers -->
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- XML docs policy: docs for packages, no noise for samples/tools -->
+    <GenerateDocumentationFile Condition="'$(IsPackable)'=='true'">true</GenerateDocumentationFile>
+    <GenerateDocumentationFile Condition="'$(IsPackable)'!='true'">false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>
+  <!-- SourceLink for packable projects -->
+  <ItemGroup Condition="'$(IsPackable)'=='true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsPackable)'=='true'">
+    <!-- Ensure root README/LICENSE/icon are packed once for all packages -->
+    <None Remove="README.md" />
+    <None Remove="LICENSE" />
+    <None Remove="icon.png" />
+
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

@@ -1,23 +1,18 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-  </PropertyGroup>
 
-  <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>TelegramBotKit.Routing</PackageId>
     <Description>Optional routing sugar for TelegramBotKit (ASP.NET-style Use* methods).</Description>
-    <PackageTags>telegram;bot;telegram-bot;dotnet;routing</PackageTags>
-    <!-- keep in sync with TelegramBotKit package -->
-    <Version>0.1.0</Version>
+    <PackageTags>telegram;telegram-bot;bot;routing;commands;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TelegramBotKit\TelegramBotKit.csproj" />
   </ItemGroup>
-
 
 </Project>

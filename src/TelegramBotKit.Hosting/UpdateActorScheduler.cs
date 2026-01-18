@@ -120,7 +120,15 @@ internal sealed class UpdateActorScheduler : IDisposable
             return new ActorKey(ActorKeyKind.Chat, msg.Chat.Id);
 
         if (upd.CallbackQuery is not null)
+        {
+            // Key callback queries by user to avoid concurrent callback handling for the same user.
+            // Keying by chat can deadlock request/response flows where the next user message is needed.
+            var uid = upd.CallbackQuery.From?.Id ?? 0;
+            if (uid != 0)
+                return new ActorKey(ActorKeyKind.User, uid);
+
             return null;
+        }
 
         if (upd.InlineQuery is not null)
             return new ActorKey(ActorKeyKind.User, upd.InlineQuery.From.Id);

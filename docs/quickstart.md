@@ -1,24 +1,8 @@
-# TelegramBotKit
+# Quick start
 
-TelegramBotKit is a lightweight toolkit for building Telegram bots on .NET with a structured update pipeline, typed handlers, and simple command routing.
+This guide shows a minimal polling bot using **TelegramBotKit**.
 
-## Packages
-
-- `TelegramBotKit` — core pipeline, commands, messaging.
-- `TelegramBotKit.Hosting` — polling/hosting integration.
-- `TelegramBotKit.Routing` — optional ASP.NET-style `Use*` routing sugar.
-- `TelegramBotKit.Generators` — optional Roslyn source generator for compile-time `AddCommands()` registration.
-
-## Features
-
-- Middleware pipeline for update processing.
-- Typed update payload handlers (`IUpdatePayloadHandler<TPayload>`).
-- Message/text/callback commands with attributes.
-- `WaitForUserResponse` helper for request/response flows.
-- `IMessageSender` facade for sending messages.
-- Optional queued sender to reduce rate-limit errors.
-
-## Installation
+## 1) Install packages
 
 ```bash
 dotnet add package TelegramBotKit
@@ -29,9 +13,7 @@ dotnet add package TelegramBotKit.Routing
 dotnet add package TelegramBotKit.Generators
 ```
 
-## Quick start (polling)
-
-1) Add configuration.
+## 2) Configure
 
 Create `appsettings.json`:
 
@@ -49,7 +31,7 @@ Create `appsettings.json`:
 }
 ```
 
-2) Create a host.
+## 3) Create a host
 
 ```csharp
 using Microsoft.Extensions.Hosting;
@@ -78,7 +60,7 @@ var host = builder.Build();
 await host.RunAsync();
 ```
 
-3) Add a command.
+## 4) Add a command
 
 ```csharp
 using Telegram.Bot.Types;
@@ -100,16 +82,8 @@ public sealed class StartCommand : IMessageCommand
 }
 ```
 
-## Documentation
+## Next
 
-- `docs/quickstart.md`
-- `docs/commands-and-routing.md`
-- `docs/middleware.md`
-- `docs/hosting.md`
-- `docs/public-api.md`
-
-## Running the sample
-
-```bash
-dotnet run --project samples/TelegramBotKit.Sample.ConsolePolling
-```
+- Commands and routing: `docs/commands-and-routing.md`
+- Middleware: `docs/middleware.md`
+- Hosting: `docs/hosting.md`
