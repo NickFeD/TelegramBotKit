@@ -2,9 +2,11 @@
 
 TelegramBotKit is a lightweight toolkit for building Telegram bots on .NET with a structured update pipeline, typed handlers, and simple command routing.
 
+📚 **Start here:** **[Documentation index](docs/README.md)**
+
 ## Packages
 
-- `TelegramBotKit` — core pipeline, commands, messaging.
+- `TelegramBotKit` — core pipeline, dispatching, commands, messaging helpers.
 - `TelegramBotKit.Hosting` — polling/hosting integration.
 - `TelegramBotKit.Routing` — optional ASP.NET-style `Use*` routing sugar.
 - `TelegramBotKit.Generators` — optional Roslyn source generator for compile-time `AddCommands()` registration.
@@ -13,25 +15,31 @@ TelegramBotKit is a lightweight toolkit for building Telegram bots on .NET with 
 
 - Middleware pipeline for update processing.
 - Typed update payload handlers (`IUpdatePayloadHandler<TPayload>`).
-- Message/text/callback commands with attributes.
+- Message/text/callback commands (attributes + optional routing sugar).
 - `WaitForUserResponse` helper for request/response flows.
 - `IMessageSender` facade for sending messages.
 - Optional queued sender to reduce rate-limit errors.
+
+## Requirements
+
+- **.NET 10** (current target framework is `net10.0`).
 
 ## Installation
 
 ```bash
 dotnet add package TelegramBotKit
 dotnet add package TelegramBotKit.Hosting
+
 # optional
 dotnet add package TelegramBotKit.Routing
+
 # optional (compile-time AddCommands)
 dotnet add package TelegramBotKit.Generators
-```
+````
 
 ## Quick start (polling)
 
-1) Add configuration.
+1. Add configuration.
 
 Create `appsettings.json`:
 
@@ -49,7 +57,10 @@ Create `appsettings.json`:
 }
 ```
 
-2) Create a host.
+> `AllowedUpdates: []` means “allow all update types”.
+> If you want only specific types, list them explicitly.
+
+2. Create a host.
 
 ```csharp
 using Microsoft.Extensions.Hosting;
@@ -70,6 +81,7 @@ var bot = builder.Services.AddTelegramBotKit(opt =>
 // Otherwise it falls back to reflection-based discovery.
 builder.Services.AddCommands();
 
+// Optional: queued sender (helps with Telegram rate limits)
 bot.UseQueuedMessageSender();
 
 builder.Services.AddTelegramBotKitPolling();
@@ -78,7 +90,7 @@ var host = builder.Build();
 await host.RunAsync();
 ```
 
-3) Add a command.
+3. Add a command.
 
 ```csharp
 using Telegram.Bot.Types;
@@ -102,11 +114,16 @@ public sealed class StartCommand : IMessageCommand
 
 ## Documentation
 
-- `docs/quickstart.md`
-- `docs/commands-and-routing.md`
-- `docs/middleware.md`
-- `docs/hosting.md`
-- `docs/public-api.md`
+* **[Documentation index](docs/README.md)** (recommended starting point)
+* [Quickstart](docs/quickstart.md)
+* [Commands and routing](docs/commands-and-routing.md)
+* [Updates and payload handlers (custom Update types)](docs/updates.md)
+* [Middleware](docs/middleware.md)
+* [Hosting / Polling](docs/hosting.md)
+* [Conversations (`WaitForUserResponse`)](docs/conversations.md)
+* [Keyboards](docs/keyboards.md)
+* [Public API notes](docs/public-api.md)
+* [Releasing](docs/releasing.md)
 
 ## Running the sample
 
