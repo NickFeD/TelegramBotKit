@@ -22,6 +22,10 @@ internal sealed class MiddlewarePipeline
     {
         if (terminal is null) throw new ArgumentNullException(nameof(terminal));
 
+        // Fast path: no middlewares registered.
+        if (_middlewareFactories.Length == 0)
+            return terminal;
+
         var middlewares = new IUpdateMiddleware[_middlewareFactories.Length];
         for (int i = 0; i < _middlewareFactories.Length; i++)
         {

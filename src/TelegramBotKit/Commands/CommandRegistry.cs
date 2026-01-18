@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Telegram.Bot.Types;
 
 namespace TelegramBotKit.Commands;
@@ -42,8 +43,9 @@ internal sealed class CommandRegistry
                 throw new InvalidOperationException($"Duplicate callback command: '{key}'");
         }
 
-        _messageBySlash = msg;
-        _callbackByKey = cb;
+        // Registry is read-only after startup. Frozen dictionaries improve lookup speed.
+        _messageBySlash = msg.ToFrozenDictionary();
+        _callbackByKey = cb.ToFrozenDictionary();
 
         var textExact = new Dictionary<string, TextCommandInvoker>(StringComparer.Ordinal);
         var textIgnore = new Dictionary<string, TextCommandInvoker>(StringComparer.OrdinalIgnoreCase);
@@ -75,15 +77,27 @@ internal sealed class CommandRegistry
                 throw new InvalidOperationException($"Text trigger '{kv.Key}' is registered both case-sensitive and ignoreCase.");
         }
 
-        _textExact = textExact;
-        _textIgnoreCase = textIgnore;
+        _textExact = textExact.ToFrozenDictionary();
+        _textIgnoreCase = textIgnore.ToFrozenDictionary();
     }
 
     public bool TryGetMessageCommand(string slash, out MessageCommandInvoker invoker)
         => _messageBySlash.TryGetValue(NormalizeSlash(slash), out invoker!);
 
+    /// <summary>
+    /// Fast-path lookup for an already normalized slash command (trimmed, leading '/', no '@bot').
+    /// </summary>
+    public bool TryGetMessageCommandNormalized(string normalizedSlash, out MessageCommandInvoker invoker)
+        => _messageBySlash.TryGetValue(normalizedSlash, out invoker!);
+
     public bool TryGetCallbackCommand(string key, out CallbackCommandInvoker invoker)
         => _callbackByKey.TryGetValue(key.Trim(), out invoker!);
+
+    /// <summary>
+    /// Fast-path lookup for an already trimmed callback key.
+    /// </summary>
+    public bool TryGetCallbackCommandNormalized(string trimmedKey, out CallbackCommandInvoker invoker)
+        => _callbackByKey.TryGetValue(trimmedKey, out invoker!);
 
     public bool TryGetTextCommand(string text, out TextCommandInvoker invoker)
     {
@@ -99,6 +113,23 @@ internal sealed class CommandRegistry
             return true;
 
         return _textIgnoreCase.TryGetValue(text, out invoker!);
+    }
+
+    /// <summary>
+    /// Fast-path lookup for an already trimmed non-empty text message.
+    /// </summary>
+    public bool TryGetTextCommandNormalized(string trimmedText, out TextCommandInvoker invoker)
+    {
+        if (string.IsNullOrEmpty(trimmedText))
+        {
+            invoker = null!;
+            return false;
+        }
+
+        if (_textExact.TryGetValue(trimmedText, out invoker!))
+            return true;
+
+        return _textIgnoreCase.TryGetValue(trimmedText, out invoker!);
     }
 
     public static string NormalizeSlash(string cmd)

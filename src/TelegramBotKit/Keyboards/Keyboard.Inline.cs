@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Collections.Generic;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Keyboards;
@@ -41,14 +42,60 @@ public static partial class Keyboard
     {
         if (rows is null) throw new ArgumentNullException(nameof(rows));
 
-        var materialized = rows
-            .Select(r => (r ?? Array.Empty<InlineKeyboardButton>())
-                .Where(b => b is not null)
-                .ToArray())
-            .Where(r => r.Length > 0)
-            .ToArray();
+        // Materialize without LINQ to reduce allocations.
+        var list = new List<InlineKeyboardButton[]>();
 
-        return new InlineKeyboardMarkup(materialized);
+        foreach (var row in rows)
+        {
+            if (row is null)
+                continue;
+
+            // Fast path: already an array.
+            if (row is InlineKeyboardButton[] arr)
+            {
+                var count = 0;
+                for (var i = 0; i < arr.Length; i++)
+                {
+                    if (arr[i] is not null)
+                        count++;
+                }
+
+                if (count == 0)
+                    continue;
+
+                if (count == arr.Length)
+                {
+                    list.Add(arr);
+                    continue;
+                }
+
+                var filtered = new InlineKeyboardButton[count];
+                var idx = 0;
+                for (var i = 0; i < arr.Length; i++)
+                {
+                    var b = arr[i];
+                    if (b is not null)
+                        filtered[idx++] = b;
+                }
+
+                list.Add(filtered);
+                continue;
+            }
+
+            // General path: enumerate.
+            List<InlineKeyboardButton>? tmp = null;
+            foreach (var b in row)
+            {
+                if (b is null) continue;
+                tmp ??= new List<InlineKeyboardButton>();
+                tmp.Add(b);
+            }
+
+            if (tmp is { Count: > 0 })
+                list.Add(tmp.ToArray());
+        }
+
+        return new InlineKeyboardMarkup(list.ToArray());
     }
 
     /// <summary>

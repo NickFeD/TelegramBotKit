@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Channels;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
@@ -18,8 +18,11 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _worker;
 
+    private readonly long _globalMinIntervalTicks;
     private long _globalNextAllowedUtcTicks;
-    private readonly ConcurrentDictionary<long, long> _chatNextAllowedUtcTicks = new();
+
+    private readonly long _perChatMinDelayTicks;
+    private readonly Dictionary<long, long> _chatNextAllowedUtcTicks = new();
 
     public QueuedMessageSender(
         MessageSender inner,
@@ -39,6 +42,19 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             SingleReader = true,
             SingleWriter = false
         });
+
+        // Precompute throttling ticks for the hot path.
+        if (_opt.GlobalMaxPerSecond > 0)
+        {
+            var minIntervalTicks = (long)Math.Ceiling(TimeSpan.TicksPerSecond / (double)_opt.GlobalMaxPerSecond);
+            _globalMinIntervalTicks = Math.Max(1, minIntervalTicks);
+        }
+        else
+        {
+            _globalMinIntervalTicks = 0;
+        }
+
+        _perChatMinDelayTicks = _opt.PerChatMinDelay > TimeSpan.Zero ? _opt.PerChatMinDelay.Ticks : 0;
 
         _worker = Task.Run(WorkerAsync, CancellationToken.None);
     }
@@ -66,11 +82,7 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
 
 
     public Task AnswerCallback(string callbackQueryId, AnswerCallback answer, CancellationToken ct = default)
-        => EnqueueNoChat(async t =>
-        {
-            await _inner.AnswerCallback(callbackQueryId, answer, t).ConfigureAwait(false);
-            return 0;
-        }, ct);
+        => EnqueueNoChat(t => _inner.AnswerCallback(callbackQueryId, answer, t), ct);
     private Task Enqueue(long chatId, Func<CancellationToken, Task> op, CancellationToken ct)
     {
         if (chatId == 0) throw new ArgumentOutOfRangeException(nameof(chatId));
@@ -103,25 +115,8 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             OnCanceled: () => tcs.TrySetCanceled(ct),
             OnError: ex => tcs.TrySetException(ex));
 
-        _ = WriteAsync(item);
+        _ = TryWriteOrEnqueueAsync(item, ct);
         return tcs.Task;
-
-        async Task WriteAsync(OutgoingItem it)
-        {
-            try
-            {
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _stop.Token);
-                await _queue.Writer.WriteAsync(it, linked.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                it.OnCanceled();
-            }
-            catch (Exception ex)
-            {
-                it.OnError(ex);
-            }
-        }
     }
 
 
@@ -157,24 +152,38 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             OnCanceled: () => tcs.TrySetCanceled(ct),
             OnError: ex => tcs.TrySetException(ex));
 
-        _ = WriteAsync(item);
+        _ = TryWriteOrEnqueueAsync(item, ct);
         return tcs.Task;
+    }
 
-        async Task WriteAsync(OutgoingItem it)
+    private Task TryWriteOrEnqueueAsync(OutgoingItem item, CancellationToken callerToken)
+    {
+        // Fast path: queue has space.
+        if (_queue.Writer.TryWrite(item))
+            return Task.CompletedTask;
+
+        return EnqueueSlowAsync(item, callerToken);
+    }
+
+    private async Task EnqueueSlowAsync(OutgoingItem item, CancellationToken callerToken)
+    {
+        try
         {
-            try
-            {
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _stop.Token);
-                await _queue.Writer.WriteAsync(it, linked.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                it.OnCanceled();
-            }
-            catch (Exception ex)
-            {
-                it.OnError(ex);
-            }
+            // If the channel is completed (e.g. during shutdown), this will fail quickly.
+            await _queue.Writer.WriteAsync(item, callerToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            item.OnCanceled();
+        }
+        catch (ChannelClosedException)
+        {
+            // Treat shutdown/closed queue as cancellation.
+            item.OnCanceled();
+        }
+        catch (Exception ex)
+        {
+            item.OnError(ex);
         }
     }
 
@@ -198,54 +207,58 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
 
     private async Task ProcessItemAsync(OutgoingItem item)
     {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, item.CallerToken);
-        var ct = linked.Token;
+        CancellationTokenSource? linked = null;
+        var ct = GetLinkedTokenOrSingle(item.CallerToken, _stop.Token, ref linked);
 
-        for (var attempt = 1; attempt <= Math.Max(1, _opt.MaxRetryAttempts); attempt++)
+        try
         {
-            try
+            for (var attempt = 1; attempt <= Math.Max(1, _opt.MaxRetryAttempts); attempt++)
             {
-                ct.ThrowIfCancellationRequested();
-
-                await ApplyThrottlesAsync(item.ChatId, ct).ConfigureAwait(false);
-
-                await item.RunOnceAsync(ct).ConfigureAwait(false);
-                return;
-            }
-            catch (OperationCanceledException) when (item.CallerToken.IsCancellationRequested || _stop.IsCancellationRequested)
-            {
-                item.OnCanceled();
-                return;
-            }
-            catch (Exception ex) when (attempt < _opt.MaxRetryAttempts && TryGetRetryDelay(ex, attempt, out var delay))
-            {
-                _log.LogWarning(ex, "Telegram send failed, retry in {Delay} (attempt {Attempt}/{Max}).", delay, attempt, _opt.MaxRetryAttempts);
-
                 try
                 {
-                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                    ct.ThrowIfCancellationRequested();
+
+                    await ApplyThrottlesAsync(item.ChatId, ct).ConfigureAwait(false);
+
+                    await item.RunOnceAsync(ct).ConfigureAwait(false);
+                    return;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (item.CallerToken.IsCancellationRequested || _stop.IsCancellationRequested)
                 {
                     item.OnCanceled();
                     return;
                 }
+                catch (Exception ex) when (attempt < _opt.MaxRetryAttempts && TryGetRetryDelay(ex, attempt, out var delay))
+                {
+                    _log.LogWarning(ex, "Telegram send failed, retry in {Delay} (attempt {Attempt}/{Max}).", delay, attempt, _opt.MaxRetryAttempts);
+
+                    try
+                    {
+                        await Task.Delay(delay, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        item.OnCanceled();
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    item.OnError(ex);
+                    return;
+                }
             }
-            catch (Exception ex)
-            {
-                item.OnError(ex);
-                return;
-            }
+        }
+        finally
+        {
+            linked?.Dispose();
         }
     }
 
     private async Task ApplyThrottlesAsync(long? chatId, CancellationToken ct)
     {
-        if (_opt.GlobalMaxPerSecond > 0)
+        if (_globalMinIntervalTicks > 0)
         {
-            var minIntervalTicks = (long)Math.Ceiling(TimeSpan.TicksPerSecond / (double)_opt.GlobalMaxPerSecond);
-            if (minIntervalTicks < 1) minIntervalTicks = 1;
-
             var now = DateTimeOffset.UtcNow.UtcTicks;
 
             if (now < _globalNextAllowedUtcTicks)
@@ -254,13 +267,15 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
                 now = DateTimeOffset.UtcNow.UtcTicks;
             }
 
-            _globalNextAllowedUtcTicks = now + minIntervalTicks;
+            _globalNextAllowedUtcTicks = now + _globalMinIntervalTicks;
         }
 
-        if (chatId is not null && _opt.PerChatMinDelay > TimeSpan.Zero)
+        if (chatId is not null && _perChatMinDelayTicks > 0)
         {
             var now = DateTimeOffset.UtcNow.UtcTicks;
-            var next = _chatNextAllowedUtcTicks.GetOrAdd(chatId.Value, 0);
+
+            if (!_chatNextAllowedUtcTicks.TryGetValue(chatId.Value, out var next))
+                next = 0;
 
             if (now < next)
             {
@@ -268,8 +283,21 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
                 now = DateTimeOffset.UtcNow.UtcTicks;
             }
 
-            _chatNextAllowedUtcTicks[chatId.Value] = now + _opt.PerChatMinDelay.Ticks;
+            _chatNextAllowedUtcTicks[chatId.Value] = now + _perChatMinDelayTicks;
         }
+    }
+
+    private static CancellationToken GetLinkedTokenOrSingle(
+        CancellationToken a,
+        CancellationToken b,
+        ref CancellationTokenSource? linked)
+    {
+        if (!a.CanBeCanceled) return b;
+        if (!b.CanBeCanceled) return a;
+        if (a == b) return a;
+
+        linked = CancellationTokenSource.CreateLinkedTokenSource(a, b);
+        return linked.Token;
     }
 
 

@@ -19,28 +19,68 @@ internal sealed class UpdateHandlerRegistry
 
         lock (_sync)
         {
-            _routes[type] = async ctx =>
+            // Hot-path optimized route:
+            // - Avoid allocating an async state machine when there are 0 or 1 handlers.
+            // - Prefer array iteration to avoid IEnumerator allocations when DI returns T[] (default MS.DI behavior).
+            _routes[type] = ctx =>
             {
                 var payload = extractor(ctx.Update);
-                if (payload is null) return;
+                if (payload is null)
+                    return Task.CompletedTask;
 
-                var any = false;
-                foreach (var h in ctx.Services.GetServices<IUpdatePayloadHandler<TPayload>>())
+                var handlers = ctx.Services.GetServices<IUpdatePayloadHandler<TPayload>>();
+
+                if (handlers is IUpdatePayloadHandler<TPayload>[] arr)
                 {
-                    any = true;
-                    await h.HandleAsync(payload, ctx).ConfigureAwait(false);
+                    var len = arr.Length;
+
+                    if (len == 0)
+                        return InvokeFallbackAsync(ctx);
+
+                    if (len == 1)
+                        return arr[0].HandleAsync(payload, ctx);
+
+                    return InvokeManyAsync(arr, payload, ctx);
                 }
 
-                if (!any)
-                {
-                    var fallback = ctx.Services.GetService<IDefaultUpdateHandler>();
-                    if (fallback is not null)
-                        await fallback.HandleAsync(ctx).ConfigureAwait(false);
-                }
+                return InvokeEnumerableAsync(handlers, payload, ctx);
             };
         }
 
         return this;
+    }
+
+    private static Task InvokeFallbackAsync(BotContext ctx)
+    {
+        var fallback = ctx.Services.GetService<IDefaultUpdateHandler>();
+        return fallback is null ? Task.CompletedTask : fallback.HandleAsync(ctx);
+    }
+
+    private static async Task InvokeManyAsync<TPayload>(
+        IUpdatePayloadHandler<TPayload>[] handlers,
+        TPayload payload,
+        BotContext ctx)
+        where TPayload : class
+    {
+        for (int i = 0; i < handlers.Length; i++)
+            await handlers[i].HandleAsync(payload, ctx).ConfigureAwait(false);
+    }
+
+    private static async Task InvokeEnumerableAsync<TPayload>(
+        IEnumerable<IUpdatePayloadHandler<TPayload>> handlers,
+        TPayload payload,
+        BotContext ctx)
+        where TPayload : class
+    {
+        var any = false;
+        foreach (var h in handlers)
+        {
+            any = true;
+            await h.HandleAsync(payload, ctx).ConfigureAwait(false);
+        }
+
+        if (!any)
+            await InvokeFallbackAsync(ctx).ConfigureAwait(false);
     }
 
     public bool TryGetRoute(UpdateType type, out Func<BotContext, Task> route)

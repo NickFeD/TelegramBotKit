@@ -31,7 +31,10 @@ public sealed class TelegramBotKitBuilder
     public TelegramBotKitBuilder UseMiddleware<TMiddleware>()
         where TMiddleware : class, IUpdateMiddleware
     {
-        _middlewareFactories.Add(sp => (IUpdateMiddleware)ActivatorUtilities.CreateInstance(sp, typeof(TMiddleware)));
+        // Prefer DI resolution if the middleware is registered (e.g. as a singleton),
+        // otherwise fall back to ActivatorUtilities for convenience.
+        _middlewareFactories.Add(sp =>
+            sp.GetService<TMiddleware>() ?? ActivatorUtilities.CreateInstance<TMiddleware>(sp));
         return this;
     }
 
@@ -43,6 +46,18 @@ public sealed class TelegramBotKitBuilder
         if (middleware is null) throw new ArgumentNullException(nameof(middleware));
 
         _middlewareFactories.Add(_ => new InlineUpdateMiddleware(middleware));
+        return this;
+    }
+
+    /// <summary>
+    /// Adds an inline middleware using <see cref="ValueTask"/> for reduced allocations when the middleware
+    /// (and/or the next delegate) often completes synchronously.
+    /// </summary>
+    public TelegramBotKitBuilder UseMiddleware(Func<BotContext, BotContextDelegate, ValueTask> middleware)
+    {
+        if (middleware is null) throw new ArgumentNullException(nameof(middleware));
+
+        _middlewareFactories.Add(_ => new InlineUpdateMiddlewareValueTask(middleware));
         return this;
     }
     /// <summary>

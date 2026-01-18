@@ -28,14 +28,16 @@ internal sealed class CommandRouter
             if (cmd is null)
                 return false;
 
-            if (!_registry.TryGetMessageCommand(cmd, out var invoker))
+            // cmd is already normalized by ExtractSlashCommand (trimmed, leading '/', no '@bot').
+            if (!_registry.TryGetMessageCommandNormalized(cmd, out var invoker))
                 return false;
 
             await invoker(message, ctx).ConfigureAwait(false);
             return true;
         }
 
-        if (!_registry.TryGetTextCommand(text, out var textInvoker))
+        // text is already trimmed above.
+        if (!_registry.TryGetTextCommandNormalized(text, out var textInvoker))
             return false;
 
         await textInvoker(message, ctx).ConfigureAwait(false);
@@ -53,7 +55,8 @@ internal sealed class CommandRouter
         if (!TryParseCallbackData(data, out var key, out var args))
             return false;
 
-        if (!_registry.TryGetCallbackCommand(key, out var invoker))
+        // key is already trimmed by TryParseCallbackData.
+        if (!_registry.TryGetCallbackCommandNormalized(key, out var invoker))
             return false;
 
         await invoker(query, args, ctx).ConfigureAwait(false);
@@ -62,29 +65,108 @@ internal sealed class CommandRouter
 
     private static string? ExtractSlashCommand(string text)
     {
-        var first = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[0];
-        if (first.Length < 2 || first[0] != '/')
+        // Hot path: avoid string.Split allocations.
+        // Expected input is already trimmed by caller.
+        if (text.Length < 2 || text[0] != '/')
             return null;
 
-        var at = first.IndexOf('@');
-        if (at >= 0)
-            first = first[..at];
+        // Find end of the first token (command), separated by spaces.
+        var end = 0;
+        while (end < text.Length && text[end] != ' ')
+            end++;
 
-        return first;
+        if (end < 2)
+            return null;
+
+        // Strip optional bot username: "/start@MyBot" -> "/start".
+        var at = text.IndexOf('@', 0, end);
+        if (at >= 0)
+            end = at;
+
+        return end >= 2 ? text.Substring(0, end) : null;
     }
 
     private static bool TryParseCallbackData(string data, out string key, out string[] args)
     {
-        var parts = data.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0)
+        // Hot path: avoid Split + LINQ allocations.
+        // Format: "{key} {arg1} {arg2} ..."; multiple spaces are ignored.
+        if (string.IsNullOrWhiteSpace(data))
         {
             key = string.Empty;
             args = Array.Empty<string>();
             return false;
         }
 
-        key = parts[0];
-        args = parts.Length > 1 ? parts.Skip(1).ToArray() : Array.Empty<string>();
-        return !string.IsNullOrWhiteSpace(key);
+        var len = data.Length;
+        var i = 0;
+
+        // Skip leading spaces
+        while (i < len && data[i] == ' ')
+            i++;
+
+        if (i >= len)
+        {
+            key = string.Empty;
+            args = Array.Empty<string>();
+            return false;
+        }
+
+        // Read key token
+        var keyStart = i;
+        while (i < len && data[i] != ' ')
+            i++;
+
+        var keyLen = i - keyStart;
+        if (keyLen <= 0)
+        {
+            key = string.Empty;
+            args = Array.Empty<string>();
+            return false;
+        }
+
+        key = data.Substring(keyStart, keyLen);
+
+        // First pass: count args
+        var count = 0;
+        while (i < len)
+        {
+            while (i < len && data[i] == ' ')
+                i++;
+
+            if (i >= len)
+                break;
+
+            count++;
+            while (i < len && data[i] != ' ')
+                i++;
+        }
+
+        if (count == 0)
+        {
+            args = Array.Empty<string>();
+            return true;
+        }
+
+        // Second pass: materialize args
+        args = new string[count];
+        i = keyStart + keyLen;
+        var a = 0;
+
+        while (i < len)
+        {
+            while (i < len && data[i] == ' ')
+                i++;
+
+            if (i >= len)
+                break;
+
+            var argStart = i;
+            while (i < len && data[i] != ' ')
+                i++;
+
+            args[a++] = data.Substring(argStart, i - argStart);
+        }
+
+        return true;
     }
 }

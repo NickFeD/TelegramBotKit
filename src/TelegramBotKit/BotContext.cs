@@ -10,6 +10,8 @@ namespace TelegramBotKit;
 /// </summary>
 public sealed class BotContext
 {
+    private IDictionary<string, object?>? _items;
+
     /// <summary>
     /// Initializes a new instance of BotContext.
     /// </summary>
@@ -25,7 +27,6 @@ public sealed class BotContext
         Sender = sender ?? throw new ArgumentNullException(nameof(sender));
         Services = services ?? throw new ArgumentNullException(nameof(services));
         CancellationToken = cancellationToken;
-        Items = new Dictionary<string, object?>(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -57,7 +58,8 @@ public sealed class BotContext
     /// <summary>
     /// Gets the context items.
     /// </summary>
-    public IDictionary<string, object?> Items { get; }
+    public IDictionary<string, object?> Items
+        => _items ??= new Dictionary<string, object?>(StringComparer.Ordinal);
 
     /// <summary>
     /// Gets the required service.
