@@ -2,6 +2,10 @@
 
 This guide shows a minimal polling bot using **TelegramBotKit**.
 
+## Requirements
+
+- **.NET 10** (TelegramBotKit currently targets `net10.0`).
+
 ## 1) Install packages
 
 ```bash
@@ -30,6 +34,10 @@ Create `appsettings.json`:
   }
 }
 ```
+
+Notes:
+
+- `AllowedUpdates: []` means **all update types** (Telegram default). If you set it to a non-empty list, Telegram will only deliver the types you requested.
 
 ## 3) Create a host
 
@@ -84,6 +92,9 @@ public sealed class StartCommand : IMessageCommand
 
 ## Next
 
-- Commands and routing: `docs/commands-and-routing.md`
-- Middleware: `docs/middleware.md`
-- Hosting: `docs/hosting.md`
+- Commands and routing: `./commands-and-routing.md`
+- Middleware: `./middleware.md`
+- Hosting: `./hosting.md`
+- Updates and payload handlers: `./updates.md`
+- Conversations (WaitForUserResponse): `./conversations.md`
+- Keyboards: `./keyboards.md`

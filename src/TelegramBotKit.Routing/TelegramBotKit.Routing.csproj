@@ -9,6 +9,7 @@
     <PackageId>TelegramBotKit.Routing</PackageId>
     <Description>Optional routing sugar for TelegramBotKit (ASP.NET-style Use* methods).</Description>
     <PackageTags>telegram;telegram-bot;bot;routing;commands;dotnet</PackageTags>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>

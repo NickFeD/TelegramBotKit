@@ -25,6 +25,21 @@ By default the scheduler processes updates on "actors" to reduce race conditions
 
 This lets request/response flows (see `WaitForUserResponse`) work reliably while still enabling parallelism.
 
+Additional notes:
+
+- Some update types are **unkeyed** (for example, `UpdateType.Poll`). These are processed immediately and only respect the global DOP limit.
+- Idle actors are cleaned up after a short period of inactivity.
+
+## WaitForUserResponse gotchas
+
+`WaitForUserResponse` is a small helper for “ask a question → wait for the next message from this user”.
+
+- TelegramBotKit will try to publish incoming `Message` payloads to any active waiter **before** running command routing.
+- Only **one active wait** is allowed per `(chatId, userId)`. If you call `WaitAsync` again while a previous wait is still active, it throws:
+  `InvalidOperationException: Already waiting for message from chat:... user:...`
+
+See `./conversations.md` for recommended usage patterns.
+
 ## Global rate limiting
 
 Polling uses a global DOP limiter. If you need stricter control, set `MaxDegreeOfParallelism` to a lower value (or `0` to disable).

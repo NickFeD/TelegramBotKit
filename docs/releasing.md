@@ -6,6 +6,7 @@ This repo uses GitHub Actions to build, pack, and publish all NuGet packages.
 Workflow: `.github/workflows/ci.yml`
 
 - Restores and builds in `Release`
+- (No tests are run in this workflow.)
 - Packs **all** projects under `src/*/*.csproj`
 - Uploads `.nupkg` and `.snupkg` as workflow artifacts
 

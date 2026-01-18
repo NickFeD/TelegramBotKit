@@ -19,6 +19,11 @@ Everything else in the repository should be treated as implementation detail and
 - TelegramBotKit.BotContext
 - TelegramBotKit.Middleware.IUpdateMiddleware
 
+### Fallbacks
+- TelegramBotKit.Fallbacks.IDefaultUpdateHandler
+- TelegramBotKit.Fallbacks.IDefaultMessageHandler
+- TelegramBotKit.Fallbacks.IDefaultCallbackHandler
+
 ### Commands
 - TelegramBotKit.Commands.ICommand
 - TelegramBotKit.Commands.IMessageCommand
@@ -42,6 +47,9 @@ Everything else in the repository should be treated as implementation detail and
 ### Conversations
 - TelegramBotKit.Conversations.WaitForUserResponse
 
+### Keyboards
+- TelegramBotKit.Keyboards.Keyboard
+
 ### Options
 - TelegramBotKit.Options.TelegramBotKitOptions
 - TelegramBotKit.Options.PollingOptions
@@ -52,7 +60,7 @@ Everything else in the repository should be treated as implementation detail and
 - TelegramBotKit.Exceptions.TelegramBotKitException and derived exceptions
 
 ## TelegramBotKit.Hosting
-- TelegramBotKit.Hosting.DependencyInjection.TelegramBotKitHostingServiceCollectionExtensions
+- TelegramBotKit.Hosting.TelegramBotKitHostingServiceCollectionExtensions
 
 ## TelegramBotKit.Routing
 - TelegramBotKit.Routing.TelegramBotKitRoutingExtensions

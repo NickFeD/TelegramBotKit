@@ -22,6 +22,7 @@
 
     <AssemblyName>TelegramBotKit.Generators</AssemblyName>
     <RootNamespace>TelegramBotKit.Generators</RootNamespace>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>

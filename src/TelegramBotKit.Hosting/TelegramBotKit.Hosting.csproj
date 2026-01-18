@@ -9,6 +9,7 @@
     <PackageId>TelegramBotKit.Hosting</PackageId>
     <Description>Hosting and polling integration for TelegramBotKit.</Description>
     <PackageTags>telegram;telegram-bot;bot;hosting;polling;dotnet</PackageTags>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>

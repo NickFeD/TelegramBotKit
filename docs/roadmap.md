@@ -1,23 +1,29 @@
-# TelegramBotKit Roadmap
+# TelegramBotKit roadmap
 
-## Сейчас (MVP)
-- Polling (GetUpdates)
-- BotContext + MiddlewarePipeline
-- Команды через [Command] + DI autoscan (по сборкам)
-- IMessageCommand / ITextCommand / ICallbackCommand
-- WaitForUserResponse (in-memory)
+This roadmap is intentionally short. It is not a promise—just a direction.
 
-## Ближайшее
-- README с QuickStart + примеры
-- TelegramBotKitException + базовые наследники (Configuration/Dispatch/CallbackData)
-- Улучшения MessageSender (тонкий wrapper и удобные методы)
+## Current (MVP)
 
-## Среднесрочно
-- Actor per user/chat dispatch strategy (без глобального залипания при ожиданиях)
-- Мини-фреймворк в стиле ASP.NET Minimal API (TelegramBotKit.Routing)
-- Webhook hosting (опционально)
-- AOT: Source Generator для регистрации команд вместо reflection
+- Polling hosting (`GetUpdates`)
+- `BotContext` + middleware pipeline
+- Command routing: message slash commands, exact text commands, callback commands
+- `WaitForUserResponse` (in-memory)
+- Optional source-generator path for `AddCommands()` (reflection fallback is available)
 
-## Позже
-- TelegramBotKit.Dialogs (state-machine сценарии)
-- Storage abstractions + Redis implementation
+## Next (towards a stable 0.x release)
+
+- Keep improving documentation and samples
+- API consistency and naming polish
+- More guidance on update routing and handler mappings
+- Performance tuning in hot paths (router, registry, middleware pipeline, sender)
+
+## Medium term
+
+- Webhook hosting integration (optional)
+- Better conversation primitives (beyond a single wait)
+- AOT-first configuration and trimming-friendly defaults
+
+## Later
+
+- A dialog/state-machine module (separate package)
+- Storage abstractions and optional Redis implementation
