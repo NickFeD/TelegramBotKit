@@ -29,6 +29,8 @@
     <GenerateDocumentationFile Condition="'$(IsPackable)'=='true'">true</GenerateDocumentationFile>
     <GenerateDocumentationFile Condition="'$(IsPackable)'!='true'">false</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <!-- SourceLink for packable projects -->
