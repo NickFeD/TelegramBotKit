@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "v*"
+  pull_request:
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-latest
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      ContinuousIntegrationBuild: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+          dotnet-quality: preview
+          cache: true
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Pack (all packages)
+        run: |
+          mkdir -p artifacts
+          for proj in src/*/*.csproj; do
+            echo "Packing $proj"
+            dotnet pack "$proj" -c Release -o artifacts --no-build
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/*.nupkg
+
+      - name: Upload symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-symbols
+          path: artifacts/*.snupkg
