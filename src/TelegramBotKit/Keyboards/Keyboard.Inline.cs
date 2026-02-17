@@ -23,11 +23,7 @@ public static partial class Keyboard
     /// </summary>
     public static InlineKeyboardButton Callback<THandler>(string text, params string[] args)
     where THandler : ICallbackCommand
-    {
-        var key = CallbackKeyProvider.GetKey<THandler>();
-        var data = PackCallbackData(key, args);
-        return InlineKeyboardButton.WithCallbackData(text, data);
-    }
+    => Callback(text, CallbackCommandKeyResolver.GetKey<THandler>(), args);
 
     /// <summary>
     /// Creates the callback raw button.

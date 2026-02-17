@@ -12,10 +12,10 @@ public sealed class StartCommand : IMessageCommand
     {
         var kb = Keyboard.Inline(
         [
-            [ Keyboard.Callback("✅ Callback", "test_callback"),
+            [ Keyboard.Callback<TestCallbackCommand>("✅ Callback"),
               Keyboard.Callback("⏳ Wait", "test_wait") ],
             [ Keyboard.Callback("🧾 Trace", "test_trace"),
-              Keyboard.Callback("❤️ Like(123)", "like", "123") ]
+              Keyboard.Callback<LikeCallbackCommand>("❤️ Like(123)", "123") ]
         ]);
 
         return ctx.Sender.SendText(

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 
 namespace TelegramBotKit.Generators;
@@ -39,12 +40,14 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var model = context.CompilationProvider.Select(static (c, ct) => Collect(c));
+        var model = context.CompilationProvider.Select(static (c, ct) => Collect(c, ct));
         context.RegisterSourceOutput(model, static (spc, m) => Emit(spc, m));
     }
 
-    private static Model Collect(Compilation compilation)
+    private static Model Collect(Compilation compilation, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         var msgAttr = compilation.GetTypeByMetadataName("TelegramBotKit.Commands.MessageCommandAttribute");
         var textAttr = compilation.GetTypeByMetadataName("TelegramBotKit.Commands.TextCommandAttribute");
         var cbAttr = compilation.GetTypeByMetadataName("TelegramBotKit.Commands.CallbackCommandAttribute");
@@ -56,11 +59,25 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
         var iText = compilation.GetTypeByMetadataName("TelegramBotKit.Commands.ITextCommand");
         var iCallback = compilation.GetTypeByMetadataName("TelegramBotKit.Commands.ICallbackCommand");
 
-        var assemblies = new List<IAssemblySymbol>();
-        assemblies.Add(compilation.Assembly);
+        // (Опционально) если ты добавишь этот hook в основной TelegramBotKit,
+        // генератор сможет построить Type->Key резолвер для CallbackCommand-ов.
+        var hasCallbackKeysHook =
+            compilation.GetTypeByMetadataName("TelegramBotKit.Commands.TelegramBotKitGeneratedCallbackKeysHook") is not null;
+
+        var assemblies = new List<IAssemblySymbol>(capacity: 8)
+        {
+            compilation.Assembly
+        };
 
         foreach (var asm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
+            ct.ThrowIfCancellationRequested();
+
+            // Не сканируем сам TelegramBotKit как reference — обычно там нет пользовательских команд,
+            // а типы/атрибуты и так доступны через compilation.GetTypeByMetadataName.
+            if (asm.Name.Equals("TelegramBotKit", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             // Only scan assemblies that reference TelegramBotKit (heuristic to avoid scanning BCL)
             if (!ReferencesTelegramBotKit(asm))
                 continue;
@@ -74,9 +91,12 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
 
         foreach (var asm in assemblies)
         {
+            ct.ThrowIfCancellationRequested();
+
             foreach (var t in GetAllTypes(asm))
             {
-                if (t is null) continue;
+                ct.ThrowIfCancellationRequested();
+
                 if (t.TypeKind != TypeKind.Class) continue;
                 if (t.IsAbstract) continue;
                 if (t.IsGenericType) continue;
@@ -84,21 +104,25 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
                 if (!IsAccessible(compilation, t))
                     continue;
 
+                // Считываем атрибуты ровно по нужным видам.
                 if (msgAttr is not null)
                 {
                     var a = GetAttribute(t, msgAttr);
                     if (a is not null)
                     {
                         if (iMessage is not null && !Implements(t, iMessage))
-                            continue;
+                            goto SkipMessage;
 
                         var cmd = GetStringCtorArg(a, 0);
                         if (!string.IsNullOrWhiteSpace(cmd))
                         {
-                            messages.Add(new MessageItem(cmd!, t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                            var loc = GetAttributeLocation(a, ct);
+                            messages.Add(new MessageItem(cmd!, t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), loc));
                         }
                     }
                 }
+
+            SkipMessage:
 
                 if (cbAttr is not null)
                 {
@@ -106,15 +130,18 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
                     if (a is not null)
                     {
                         if (iCallback is not null && !Implements(t, iCallback))
-                            continue;
+                            goto SkipCallback;
 
                         var key = GetStringCtorArg(a, 0);
                         if (!string.IsNullOrWhiteSpace(key))
                         {
-                            callbacks.Add(new CallbackItem(key!, t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                            var loc = GetAttributeLocation(a, ct);
+                            callbacks.Add(new CallbackItem(key!, t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), loc));
                         }
                     }
                 }
+
+            SkipCallback:
 
                 if (textAttr is not null)
                 {
@@ -127,14 +154,19 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
                         var (ignoreCase, triggers) = ParseTextAttribute(a);
                         if (triggers.Length > 0)
                         {
-                            texts.Add(new TextItem(ignoreCase, triggers, t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                            var loc = GetAttributeLocation(a, ct);
+                            texts.Add(new TextItem(ignoreCase, triggers, t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), loc));
                         }
                     }
                 }
             }
         }
 
-        return new Model(messages.ToImmutableArray(), texts.ToImmutableArray(), callbacks.ToImmutableArray());
+        return new Model(
+            messages.ToImmutableArray(),
+            texts.ToImmutableArray(),
+            callbacks.ToImmutableArray(),
+            hasCallbackKeysHook);
     }
 
     private static void Emit(SourceProductionContext context, Model model)
@@ -148,7 +180,7 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
         {
             var norm = NormalizeSlash(m.Command);
             if (!msgSet.Add(norm))
-                context.ReportDiagnostic(Diagnostic.Create(DuplicateMessageCommand, Location.None, norm, m.TypeName));
+                context.ReportDiagnostic(Diagnostic.Create(DuplicateMessageCommand, m.Location ?? Location.None, norm, m.TypeName));
         }
 
         var cbSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -156,7 +188,7 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
         {
             var key = c.Key.Trim();
             if (!cbSet.Add(key))
-                context.ReportDiagnostic(Diagnostic.Create(DuplicateCallbackCommand, Location.None, key, c.TypeName));
+                context.ReportDiagnostic(Diagnostic.Create(DuplicateCallbackCommand, c.Location ?? Location.None, key, c.TypeName));
         }
 
         // text triggers: case-sensitive and ignoreCase tracked separately
@@ -172,12 +204,12 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
                 if (t.IgnoreCase)
                 {
                     if (!textIgnore.Add(raw))
-                        context.ReportDiagnostic(Diagnostic.Create(DuplicateTextTrigger, Location.None, raw, true, t.TypeName));
+                        context.ReportDiagnostic(Diagnostic.Create(DuplicateTextTrigger, t.Location ?? Location.None, raw, true, t.TypeName));
                 }
                 else
                 {
                     if (!textExact.Add(raw))
-                        context.ReportDiagnostic(Diagnostic.Create(DuplicateTextTrigger, Location.None, raw, false, t.TypeName));
+                        context.ReportDiagnostic(Diagnostic.Create(DuplicateTextTrigger, t.Location ?? Location.None, raw, false, t.TypeName));
                 }
             }
         }
@@ -187,15 +219,37 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
         sb.AppendLine("#nullable enable");
         sb.AppendLine("#pragma warning disable CS1591");
         sb.AppendLine();
+        sb.AppendLine("using System;");
         sb.AppendLine("using System.Runtime.CompilerServices;");
         sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
         sb.AppendLine("using TelegramBotKit.DependencyInjection;");
         sb.AppendLine();
+
         sb.AppendLine("internal static class TelegramBotKit_GeneratedCommands_Initializer");
         sb.AppendLine("{");
         sb.AppendLine("    [ModuleInitializer]");
         sb.AppendLine("    internal static void Init()");
         sb.AppendLine("    {");
+
+        // (Опционально) Сгенерированный резолвер Type -> CallbackKey
+        // Работает только если в TelegramBotKit есть TelegramBotKitGeneratedCallbackKeysHook.
+        if (model.HasCallbackKeysHook && model.Callbacks.Length > 0)
+        {
+            sb.AppendLine("        global::TelegramBotKit.Commands.TelegramBotKitGeneratedCallbackKeysHook.SetResolver(static t =>");
+            sb.AppendLine("        {");
+
+            foreach (var c in model.Callbacks.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.Append("            if (t == typeof(").Append(c.TypeName).Append(")) return \"")
+                  .Append(Escape(c.Key)).AppendLine("\";");
+            }
+
+            sb.AppendLine("            return null;");
+            sb.AppendLine("        });");
+            sb.AppendLine();
+        }
+
+        // Генерация регистрации команд (как было)
         sb.AppendLine("        TelegramBotKitGeneratedCommandsHook.SetRegistrar(static services =>");
         sb.AppendLine("        {");
         sb.AppendLine("            if (services is null) throw new System.ArgumentNullException(nameof(services));");
@@ -203,13 +257,13 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
 
         foreach (var m in model.Messages.OrderBy(x => x.Command, StringComparer.OrdinalIgnoreCase))
         {
-            sb.Append("        services.AddMessageCommand<").Append(m.TypeName).Append(">(\"")
+            sb.Append("            services.AddMessageCommand<").Append(m.TypeName).Append(">(\"")
               .Append(Escape(m.Command)).AppendLine("\");");
         }
 
-        foreach (var t in model.Texts)
+        foreach (var t in model.Texts.OrderBy(x => x.TypeName, StringComparer.OrdinalIgnoreCase))
         {
-            sb.Append("        services.AddTextCommand<").Append(t.TypeName).Append(">(new[] { ");
+            sb.Append("            services.AddTextCommand<").Append(t.TypeName).Append(">(new[] { ");
             for (int i = 0; i < t.Triggers.Length; i++)
             {
                 if (i != 0) sb.Append(", ");
@@ -220,7 +274,7 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
 
         foreach (var c in model.Callbacks.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
         {
-            sb.Append("        services.AddCallbackCommand<").Append(c.TypeName).Append(">(\"")
+            sb.Append("            services.AddCallbackCommand<").Append(c.TypeName).Append(">(\"")
               .Append(Escape(c.Key)).AppendLine("\");");
         }
 
@@ -230,6 +284,21 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
         sb.AppendLine("}");
 
         context.AddSource("TelegramBotKit.Commands.g.cs", sb.ToString());
+    }
+
+    private static Location? GetAttributeLocation(AttributeData a, CancellationToken ct)
+    {
+        // Для referenced assemblies локации обычно нет (metadata-only).
+        var sref = a.ApplicationSyntaxReference;
+        if (sref is null) return Location.None;
+        try
+        {
+            return sref.GetSyntax(ct).GetLocation();
+        }
+        catch
+        {
+            return Location.None;
+        }
     }
 
     private static bool ReferencesTelegramBotKit(IAssemblySymbol asm)
@@ -252,8 +321,26 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
     private static bool IsAccessible(Compilation compilation, INamedTypeSymbol t)
     {
         var inThisAssembly = SymbolEqualityComparer.Default.Equals(t.ContainingAssembly, compilation.Assembly);
+
         if (inThisAssembly)
-            return true; // internal is fine within the same compilation
+        {
+            // Генерируемый файл — отдельный top-level класс, значит он НЕ сможет обратиться к:
+            // - private nested типам
+            // - protected / private protected типам (мы не наследуемся)
+            for (INamedTypeSymbol? cur = t; cur is not null; cur = cur.ContainingType)
+            {
+                switch (cur.DeclaredAccessibility)
+                {
+                    case Accessibility.Public:
+                    case Accessibility.Internal:
+                    case Accessibility.ProtectedOrInternal: // protected internal (OR) — доступно из той же сборки
+                        continue;
+                    default:
+                        return false;
+                }
+            }
+            return true;
+        }
 
         // For referenced assemblies, only public (and all containing types public)
         for (INamedTypeSymbol? cur = t; cur is not null; cur = cur.ContainingType)
@@ -274,8 +361,7 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
     {
         if (a.ConstructorArguments.Length <= index)
             return null;
-        var v = a.ConstructorArguments[index].Value;
-        return v as string;
+        return a.ConstructorArguments[index].Value as string;
     }
 
     private static (bool IgnoreCase, string[] Triggers) ParseTextAttribute(AttributeData a)
@@ -350,15 +436,21 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
     private sealed record Model(
         ImmutableArray<MessageItem> Messages,
         ImmutableArray<TextItem> Texts,
-        ImmutableArray<CallbackItem> Callbacks)
+        ImmutableArray<CallbackItem> Callbacks,
+        bool HasCallbackKeysHook)
     {
         public bool IsEmpty => Messages.Length == 0 && Texts.Length == 0 && Callbacks.Length == 0;
-        public static Model Empty => new(ImmutableArray<MessageItem>.Empty, ImmutableArray<TextItem>.Empty, ImmutableArray<CallbackItem>.Empty);
+
+        public static Model Empty => new(
+            ImmutableArray<MessageItem>.Empty,
+            ImmutableArray<TextItem>.Empty,
+            ImmutableArray<CallbackItem>.Empty,
+            HasCallbackKeysHook: false);
     }
 
-    private sealed record MessageItem(string Command, string TypeName);
+    private sealed record MessageItem(string Command, string TypeName, Location? Location);
 
-    private sealed record CallbackItem(string Key, string TypeName);
+    private sealed record CallbackItem(string Key, string TypeName, Location? Location);
 
-    private sealed record TextItem(bool IgnoreCase, string[] Triggers, string TypeName);
+    private sealed record TextItem(bool IgnoreCase, string[] Triggers, string TypeName, Location? Location);
 }
