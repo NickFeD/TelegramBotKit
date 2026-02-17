@@ -1,6 +1,7 @@
-﻿using System.Text;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Text;
 using Telegram.Bot.Types.ReplyMarkups;
+using TelegramBotKit.Commands;
 
 namespace TelegramBotKit.Keyboards;
 
@@ -16,6 +17,17 @@ public static partial class Keyboard
     /// </summary>
     public static InlineKeyboardButton Callback(string text, string key, params string[] args)
         => InlineKeyboardButton.WithCallbackData(text, PackCallbackData(key, args));
+
+    /// <summary>
+    /// Creates the callback button.
+    /// </summary>
+    public static InlineKeyboardButton Callback<THandler>(string text, params string[] args)
+    where THandler : ICallbackCommand
+    {
+        var key = CallbackKeyProvider.GetKey<THandler>();
+        var data = PackCallbackData(key, args);
+        return InlineKeyboardButton.WithCallbackData(text, data);
+    }
 
     /// <summary>
     /// Creates the callback raw button.

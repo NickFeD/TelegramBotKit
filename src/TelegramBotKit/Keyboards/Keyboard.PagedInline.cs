@@ -26,6 +26,7 @@ public static partial class Keyboard
         // but we cannot create navigation buttons.
         var canNavigate = !string.IsNullOrWhiteSpace(navKey);
 
+        var pr = pageRows <= 0 ? DefaultMaxRowsPerPage : pageRows;
         pr = Math.Clamp(pr, 1, HardMaxRowsPerPage);
 
         // Normalize rows (same style as Inline()).

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Telegram.Bot.Types;
@@ -20,6 +19,9 @@ internal sealed class UpdateActorScheduler : IDisposable
 
     private readonly ConcurrentDictionary<ActorKey, Actor> _actors = new();
     private readonly Timer _cleanup;
+
+    public IUpdateDispatcher Dispatcher => _dispatcher;
+    public ILogger<UpdateActorScheduler> Log => _log;
 
     public UpdateActorScheduler(
         IUpdateDispatcher dispatcher,
@@ -66,7 +68,7 @@ internal sealed class UpdateActorScheduler : IDisposable
         }
     }
 
-    private async Task RunWithGlobalLimitAsync(Func<Task> work, CancellationToken ct)
+    internal async Task RunWithGlobalLimitAsync(Func<Task> work, CancellationToken ct)
     {
         var sem = _dopSemaphore;
         if (sem is not null)
@@ -145,9 +147,6 @@ internal sealed class UpdateActorScheduler : IDisposable
         if (upd.ChatJoinRequest is not null)
             return new ActorKey(ActorKeyKind.Chat, upd.ChatJoinRequest.Chat.Id);
 
-        if (upd.PollAnswer is not null)
-            return new ActorKey(ActorKeyKind.User, upd.PollAnswer.User.Id);
-
         if (upd.Poll is not null)
             return null;
 
@@ -160,110 +159,4 @@ internal sealed class UpdateActorScheduler : IDisposable
         return null;
     }
 
-    private readonly record struct ActorKey(ActorKeyKind Kind, long Id);
-
-    private enum ActorKeyKind
-    {
-        Chat = 1,
-        User = 2,
-    }
-
-    private readonly record struct UpdateWorkItem(Update Update, CancellationToken Ct);
-
-    private sealed class Actor
-    {
-        private readonly ActorKey _key;
-        private readonly UpdateActorScheduler _owner;
-        private readonly Channel<UpdateWorkItem> _queue;
-
-        private int _pending;
-        private long _lastActivityTicks;
-
-        public Actor(ActorKey key, UpdateActorScheduler owner)
-        {
-            _key = key;
-            _owner = owner;
-            _queue = Channel.CreateUnbounded<UpdateWorkItem>(new UnboundedChannelOptions
-            {
-                SingleReader = true,
-                SingleWriter = false
-            });
-
-            Touch();
-
-            _ = Task.Run(RunAsync, CancellationToken.None);
-        }
-
-        /// <summary>
-        /// Gets the pending count.
-        /// </summary>
-        public int PendingCount => Volatile.Read(ref _pending);
-
-        public DateTime LastActivityUtc
-        {
-            get
-            {
-                var ticks = Volatile.Read(ref _lastActivityTicks);
-                return ticks == 0 ? DateTime.UtcNow : new DateTime(ticks, DateTimeKind.Utc);
-            }
-        }
-
-        public ValueTask EnqueueAsync(Update upd, CancellationToken ct)
-        {
-            Interlocked.Increment(ref _pending);
-            Touch();
-
-            return WriteAsync(new UpdateWorkItem(upd, ct));
-
-            async ValueTask WriteAsync(UpdateWorkItem item)
-            {
-                try
-                {
-                    await _queue.Writer.WriteAsync(item, ct).ConfigureAwait(false);
-                }
-                catch
-                {
-                    Interlocked.Decrement(ref _pending);
-                    Touch();
-                    throw;
-                }
-            }
-        }
-
-        public void Complete() => _queue.Writer.TryComplete();
-
-        private async Task RunAsync()
-        {
-            await foreach (var item in _queue.Reader.ReadAllAsync().ConfigureAwait(false))
-            {
-                try
-                {
-                    Touch();
-                    await _owner.RunWithGlobalLimitAsync(
-                        () => _owner._dispatcher.DispatchAsync(item.Update, item.Ct),
-                        item.Ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-                catch (Exception ex)
-                {
-                    _owner._log.LogError(
-                        ex,
-                        "Actor update processing failed (kind={Kind}, id={Id}), updateId={UpdateId}",
-                        _key.Kind,
-                        _key.Id,
-                        item.Update.Id);
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref _pending);
-                    Touch();
-                }
-            }
-        }
-
-        private void Touch()
-            => Volatile.Write(ref _lastActivityTicks, DateTime.UtcNow.Ticks);
-    }
 }
