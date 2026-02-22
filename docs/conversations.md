@@ -1,5 +1,7 @@
 # Conversations (WaitForUserResponse)
 
+← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
+
 TelegramBotKit includes a small helper named `WaitForUserResponse`.
 It lets you implement simple “ask a question → wait for the next message” flows.
 

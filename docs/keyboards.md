@@ -1,5 +1,7 @@
 # Keyboards
 
+← [Docs index](README.md)
+
 TelegramBotKit contains small helpers for creating Telegram reply markups:
 
 - `TelegramBotKit.Keyboards.Keyboard` for **inline keyboards** (callback / URL buttons)

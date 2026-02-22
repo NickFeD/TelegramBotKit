@@ -1,5 +1,7 @@
 # Middleware
 
+← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
+
 TelegramBotKit processes every update through a middleware pipeline (similar to ASP.NET Core).
 
 ## Inline middleware
@@ -65,3 +67,5 @@ Middlewares run in the order you register them:
 
 - First registered middleware is executed first (outermost).
 - Last registered middleware is executed last (innermost).
+
+If middleware does **not** call `next(ctx)`, the pipeline stops and routing/fallback handlers will not run.

@@ -1,5 +1,7 @@
 # Commands and routing
 
+← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
+
 TelegramBotKit supports three command styles:
 
 - **Message commands**: slash commands such as `/start`.
@@ -153,6 +155,11 @@ If no command matches, TelegramBotKit calls default handlers:
 - `IDefaultMessageHandler` for unmatched text messages
 - `IDefaultCallbackHandler` for unmatched callback queries
 - `IDefaultUpdateHandler` for update types that have no route mapping at all
+
+Notes:
+
+- `IDefaultUpdateHandler` is also used when an `UpdateType` **is mapped**, but there are **zero** `IUpdatePayloadHandler<TPayload>` registered for the mapped payload type.
+- Default handlers run **inside** the middleware pipeline (middleware wraps routing and fallbacks).
 
 By default they are **no-ops**.
 

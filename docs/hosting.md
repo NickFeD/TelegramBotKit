@@ -1,5 +1,7 @@
 # Hosting and polling
 
+← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
+
 `TelegramBotKit.Hosting` provides polling integration (`GetUpdates`) and an update scheduler.
 
 ## Enable polling
@@ -42,4 +44,7 @@ See `./conversations.md` for recommended usage patterns.
 
 ## Global rate limiting
 
-Polling uses a global DOP limiter. If you need stricter control, set `MaxDegreeOfParallelism` to a lower value (or `0` to disable).
+Polling uses a global DOP limiter (`MaxDegreeOfParallelism`).
+
+- Set it to a lower value for stricter global concurrency.
+- Set it to `0` to **remove the global limit** (unlimited concurrency; actors still serialize per key).

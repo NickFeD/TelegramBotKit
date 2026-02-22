@@ -1,5 +1,7 @@
 # Updates and Payload Handlers
 
+← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
+
 TelegramBotKit routes incoming `Update` objects in two steps:
 
 1) **Select a route by `UpdateType`** (e.g. `Message`, `CallbackQuery`, `InlineQuery`)

@@ -1,5 +1,7 @@
 # Quick start
 
+← [Docs index](README.md) · Next: [Processing pipeline](processing-pipeline.md)
+
 This guide shows a minimal polling bot using **TelegramBotKit**.
 
 ## Requirements
