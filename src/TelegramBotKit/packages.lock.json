@@ -4,52 +4,52 @@
     "net10.0": {
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Direct",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "oIy8fQxxbUsSrrOvgBqlVgOeCtDmrcynnTG+FQufcUWBrwyPfwlUkCDB2vaiBeYPyT+20u9/HeuHeBf+H4F/8g=="
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "bwGMrRcAMWx2s/RDgja97p27rxSz2pEQW0+rX5cWAUWVETVJ/eyxGfjAl8vuG5a+lckWmPIE+vcuaZNVB5YDdw=="
       },
       "Microsoft.Extensions.Logging.Abstractions": {
         "type": "Direct",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "YkmyiPIWAXVb+lPIrM0LE5bbtLOJkCiRTFiHpkVOvhI7uTvCfoOHLEN0LcsY56GpSD7NqX3gJNpsaDe87/B3zg==",
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "lxl0WLk7ROgBFAsjcOYjQ8/DVK+VMszxGBzUhgtQmAsTNldLL5pk9NG/cWTsXHq0lUhUEAtZkEE7jOGOA8bGKQ==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.1"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3"
         }
       },
       "Microsoft.Extensions.Options": {
         "type": "Direct",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "G6VVwywpJI4XIobetGHwg7wDOYC2L2XBYdtskxLaKF/Ynb5QBwLl7Q//wxAR2aVCLkMpoQrjSP9VoORkyddsNQ==",
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "hU6WzGTPvPoLA2ng1ILvWQb3g0qORdlHNsxI8IcPLumJb3suimYUl+bbDzdo1V4KFsvVhnMWzysHpKbZaoDQPQ==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.1",
-          "Microsoft.Extensions.Primitives": "10.0.1"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3",
+          "Microsoft.Extensions.Primitives": "10.0.3"
         }
       },
       "Microsoft.SourceLink.GitHub": {
         "type": "Direct",
-        "requested": "[10.0.102, )",
-        "resolved": "10.0.102",
-        "contentHash": "Oxq3RCIJSdtpIU4hLqO7XaDe/Ra3HS9Wi8rJl838SAg6Zu1iQjerA0+xXWBgUFYbgknUGCLOU0T+lzMLkvY9Qg==",
+        "requested": "[10.0.103, )",
+        "resolved": "10.0.103",
+        "contentHash": "qZk7r40ftpZY+/sO019sgWAWfNqC2CLSspDdAxNYCJU/bCi/8jVwvOMjzb/d5gjCRNzQ4OCYgBfhdpQyVwLTyw==",
         "dependencies": {
-          "Microsoft.Build.Tasks.Git": "10.0.102",
-          "Microsoft.SourceLink.Common": "10.0.102"
+          "Microsoft.Build.Tasks.Git": "10.0.103",
+          "Microsoft.SourceLink.Common": "10.0.103"
         }
       },
       "Telegram.Bot": {
         "type": "Direct",
-        "requested": "[22.8.1, )",
-        "resolved": "22.8.1",
-        "contentHash": "noNl83CXnTgeZRmbJv512X2CZmu+bLDGDGyDC6HH1XErvHWrfTn5KPCtqwGGXjRRSUb9LAHmXwR1GC3NrGZOJA==",
+        "requested": "[22.9.0, )",
+        "resolved": "22.9.0",
+        "contentHash": "h8PjZYkWm5vxoiGU3tlHUrEY1llhbyCMqibBiOWDaH8yW/1F3qwJjUhDaBPzmA3PcYVnFgnrx5b6fiRp8lGLEg==",
         "dependencies": {
           "Microsoft.Extensions.Options.ConfigurationExtensions": "8.0.0"
         }
       },
       "Microsoft.Build.Tasks.Git": {
         "type": "Transitive",
-        "resolved": "10.0.102",
-        "contentHash": "0i81LYX31U6UiXz4NOLbvc++u+/mVDmOt+PskrM/MygpDxkv9THKQyRUmavBpLK6iBV0abNWnn+CQgSRz//Pwg=="
+        "resolved": "10.0.103",
+        "contentHash": "QoiCMcPuxC6eqRQmrmF9zBY96ejIznXtve/lJJbonGD9I5Aygf2AUCOWslGiCEtBbfWRSuUnepBjuuVOdAl5ag=="
       },
       "Microsoft.Extensions.Configuration.Abstractions": {
         "type": "Transitive",
@@ -81,13 +81,13 @@
       },
       "Microsoft.Extensions.Primitives": {
         "type": "Transitive",
-        "resolved": "10.0.1",
-        "contentHash": "DO8XrJkp5x4PddDuc/CH37yDBCs9BYN6ijlKyR3vMb55BP1Vwh90vOX8bNfnKxr5B2qEI3D8bvbY1fFbDveDHQ=="
+        "resolved": "10.0.3",
+        "contentHash": "GEcpTwo7sUoLGGNTqV1FZEuL+tTD9m81NX/mh099dqGNna07/UGZShKQNZRw4hv6nlliSUwYQgSYc7OR99Jufg=="
       },
       "Microsoft.SourceLink.Common": {
         "type": "Transitive",
-        "resolved": "10.0.102",
-        "contentHash": "Mk1IMb9q5tahC2NltxYXFkLBtuBvfBoCQ3pIxYQWfzbCE9o1OB9SsHe0hnNGo7lWgTA/ePbFAJLWu6nLL9K17A=="
+        "resolved": "10.0.103",
+        "contentHash": "cMtGW5/r0ck72Jg2QwZcNTX59z+iB/B1kW84VMa/eX8L19DhHIuIcQjfK0pgLLBxd60Jl0Bj9GUolcM0MnJnZA=="
       }
     }
   }

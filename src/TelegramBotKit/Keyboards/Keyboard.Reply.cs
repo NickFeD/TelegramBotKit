@@ -26,7 +26,7 @@ public static partial class Keyboard
     /// <summary>
     /// Creates a reply keyboard button that requests a poll.
     /// </summary>
-    public static KeyboardButton RequestPoll(string text, KeyboardButtonPollType? pollType = null)
+    public static KeyboardButton RequestPoll(string text, KeyboardButtonPollType pollType)
         => KeyboardButton.WithRequestPoll(text, pollType);
 
     /// <summary>
