@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: write
-  id-token: write  # required for NuGet Trusted Publishing (OIDC)
+  id-token: write  # требуется для OIDC (Trusted Publishing)
 
 jobs:
   publish:
@@ -18,28 +18,45 @@ jobs:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
       ContinuousIntegrationBuild: true
+
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
+
+      # ВАЖНО: секреты кладём в env, а в if используем env.*
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      NUGET_USER: ${{ secrets.NUGET_USER }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: |
-            10.0.x
+          dotnet-version: 10.0.x
           dotnet-quality: preview
           cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
 
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build -c Release --no-restore
-
-      - name: Pack (all packages)
+      - name: Restore (locked) - src only
         run: |
+          set -euo pipefail
+          for proj in src/*/*.csproj; do
+            echo "Restoring $proj"
+            dotnet restore "$proj" --locked-mode
+          done
+
+      - name: Build - src only
+        run: |
+          set -euo pipefail
+          for proj in src/*/*.csproj; do
+            echo "Building $proj"
+            dotnet build "$proj" -c Release --no-restore
+          done
+
+      - name: Pack (all packages) - src only
+        run: |
+          set -euo pipefail
           mkdir -p artifacts
           for proj in src/*/*.csproj; do
             echo "Packing $proj"
@@ -57,21 +74,35 @@ jobs:
 
       - name: Validate NuGet publish settings
         run: |
-          if [ -z "${{ secrets.NUGET_API_KEY }}" ] && [ -z "${{ secrets.NUGET_USER }}" ]; then
+          set -euo pipefail
+          if [ -z "${NUGET_API_KEY:-}" ] && [ -z "${NUGET_USER:-}" ]; then
             echo "Missing secrets: set NUGET_API_KEY (classic) OR NUGET_USER (trusted publishing)." >&2
             exit 1
           fi
 
-      - name: NuGet login (Trusted Publishing)
-        if: ${{ secrets.NUGET_API_KEY == '' }}
+      - name: NuGet login (Trusted Publishing / OIDC)
+        if: env.NUGET_API_KEY == '' && env.NUGET_USER != ''
         uses: NuGet/login@v1
         id: nugetlogin
         with:
-          user: ${{ secrets.NUGET_USER }}
+          user: ${{ env.NUGET_USER }}
 
       - name: Publish to nuget.org
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY != '' && secrets.NUGET_API_KEY || steps.nugetlogin.outputs.key }}
+          OIDC_KEY: ${{ steps.nugetlogin.outputs.key }}
         run: |
-          dotnet nuget push "artifacts/*.nupkg" -k "$NUGET_API_KEY" -s "$NUGET_SOURCE" --skip-duplicate
-          dotnet nuget push "artifacts/*.snupkg" -k "$NUGET_API_KEY" -s "$NUGET_SOURCE" --skip-duplicate
+          set -euo pipefail
+
+          KEY="${NUGET_API_KEY:-}"
+          if [ -z "$KEY" ]; then
+            KEY="${OIDC_KEY:-}"
+          fi
+
+          if [ -z "$KEY" ]; then
+            echo "NuGet API key is empty (neither classic key nor OIDC key was obtained)." >&2
+            exit 1
+          fi
+
+          # В bash glob лучше держать в кавычках
+          dotnet nuget push "artifacts/*.nupkg" -k "$KEY" -s "$NUGET_SOURCE" --skip-duplicate
+          dotnet nuget push "artifacts/*.snupkg" -k "$KEY" -s "$NUGET_SOURCE" --skip-duplicate
