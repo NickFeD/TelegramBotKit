@@ -15,16 +15,16 @@ If something “does nothing”, this is the page you want.
 
 ```mermaid
 flowchart TD
-  A[Telegram Update] --> B[Hosting (optional): polling + scheduler]
-  B --> C[IUpdateDispatcher.DispatchAsync]
-  C --> D[Create DI scope]
-  D --> E[BotContext]
-  E --> F[Middleware pipeline]
-  F --> G[Route by UpdateType]
-  G -->|mapped| H[Extract payload]
-  H --> I[Resolve IUpdatePayloadHandler<TPayload>[]]
-  I -->|0 handlers| J[IDefaultUpdateHandler]
-  I -->|1..N handlers| K[Invoke handlers sequentially]
+  A["Telegram Update"] --> B["Hosting (optional): polling + scheduler"]
+  B --> C["IUpdateDispatcher.DispatchAsync"]
+  C --> D["Create DI scope"]
+  D --> E["BotContext"]
+  E --> F["Middleware pipeline"]
+  F --> G["Route by UpdateType"]
+  G -->|mapped| H["Extract payload"]
+  H --> I["Resolve IUpdatePayloadHandler<TPayload> handlers"]
+  I -->|0 handlers| J["IDefaultUpdateHandler"]
+  I -->|1..N handlers| K["Invoke handlers sequentially"]
   G -->|not mapped| J
 ```
 
@@ -72,13 +72,11 @@ For `UpdateType.Message`, TelegramBotKit runs this logic (in order):
 
 ```mermaid
 flowchart TD
-  M[MessageUpdateHandler] --> W{WaitForUserResponse
-TryPublish(message)?}
-  W -->|yes: consumed| END1[Stop]
-  W -->|no| R{CommandRouter
-TryRouteMessageAsync?}
-  R -->|yes: handled| END2[Stop]
-  R -->|no| D[IDefaultMessageHandler]
+  M["MessageUpdateHandler"] --> W{"WaitForUserResponse<br/>TryPublish(message)?"}
+  W -->|yes: consumed| END1["Stop"]
+  W -->|no| R{"CommandRouter<br/>TryRouteMessageAsync?"}
+  R -->|yes: handled| END2["Stop"]
+  R -->|no| D["IDefaultMessageHandler"]
 ```
 
 Key points:
@@ -95,10 +93,9 @@ For `UpdateType.CallbackQuery`:
 
 ```mermaid
 flowchart TD
-  C[CallbackQueryUpdateHandler] --> R{CommandRouter
-TryRouteCallbackAsync?}
-  R -->|yes: handled| END1[Stop]
-  R -->|no| D[IDefaultCallbackHandler]
+  C["CallbackQueryUpdateHandler"] --> R{"CommandRouter<br/>TryRouteCallbackAsync?"}
+  R -->|yes: handled| END1["Stop"]
+  R -->|no| D["IDefaultCallbackHandler"]
 ```
 
 Key points:
