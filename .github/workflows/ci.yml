@@ -2,10 +2,8 @@ name: CI
 
 on:
   push:
-    branches:
-      - "**"
-    tags-ignore:
-      - "v*"
+    branches: ["**"]
+    tags-ignore: ["v*"]
   pull_request:
 
 jobs:
@@ -21,26 +19,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (pinned)
         uses: actions/setup-dotnet@v5
         with:
-          # Если тебе реально нужен .NET 10 preview — оставь preview.
-          # Если не нужен — убери dotnet-quality.
-          dotnet-version: 10.0.x
+          # ПИНУЕМ ПАТЧ, чтобы не прыгали SDK-паки (ILLink.Tasks и т.п.)
+          dotnet-version: 10.0.103
           dotnet-quality: preview
-
-          # Кэш NuGet через lock-файлы
           cache: true
           cache-dependency-path: |
             **/packages.lock.json
 
-      - name: Restore (locked)
-        run: dotnet restore --locked-mode
+      - name: Show dotnet info
+        run: |
+          dotnet --info
+          dotnet --list-sdks
+          dotnet --list-runtimes
 
-      - name: Build
-        run: dotnet build -c Release --no-restore
+      - name: Restore (locked) - src only
+        run: |
+          set -euo pipefail
+          for proj in src/*/*.csproj; do
+            echo "Restoring (locked) $proj"
+            dotnet restore "$proj" --locked-mode
+          done
 
-      - name: Pack (all packages)
+      - name: Build - src only
+        run: |
+          set -euo pipefail
+          for proj in src/*/*.csproj; do
+            echo "Building $proj"
+            dotnet build "$proj" -c Release --no-restore
+          done
+
+      - name: Pack (all packages) - src only
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -48,6 +59,12 @@ jobs:
             echo "Packing $proj"
             dotnet pack "$proj" -c Release -o artifacts --no-build
           done
+
+      # Если хочешь ещё и samples билдить в CI — добавь этот шаг:
+      # - name: Build samples (non-locked)
+      #   run: |
+      #     dotnet restore samples
+      #     dotnet build samples -c Release --no-restore
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
