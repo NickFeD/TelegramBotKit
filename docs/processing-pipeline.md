@@ -20,11 +20,18 @@ flowchart TD
   C --> D["Create DI scope"]
   D --> E["BotContext"]
   E --> F["Middleware pipeline"]
-  F --> G["Route by UpdateType"]
+  F --> G["Route by UpdateType (UpdateHandlerRegistry)"]
+
   G -->|mapped| H["Extract payload"]
-  H --> I["Resolve IUpdatePayloadHandler<TPayload> handlers"]
+  H --> I["Resolve IUpdatePayloadHandler<TPayload> (0..N)"]
+
   I -->|0 handlers| J["IDefaultUpdateHandler"]
-  I -->|1..N handlers| K["Invoke handlers sequentially"]
+  I -->|1..N handlers| L["Invoke handlers sequentially<br/>order = DI registration"]
+
+  L --> H1["Handler #1"]
+  H1 --> H2["Handler #2"]
+  H2 --> H3["Handler #N"]
+
   G -->|not mapped| J
 ```
 
@@ -68,7 +75,9 @@ To handle them, add a mapping and a payload handler (see [Updates](updates.md)).
 
 ### Message flow
 
-For `UpdateType.Message`, TelegramBotKit runs this logic (in order):
+For `UpdateType.Message`, TelegramBotKit resolves **all** registered `IUpdatePayloadHandler<Message>` and invokes them **sequentially** (order = DI registration).
+
+The diagram below shows the **built-in** `MessageUpdateHandler` (it is just one handler in that list):
 
 ```mermaid
 flowchart TD
@@ -89,7 +98,9 @@ Key points:
 
 ### Callback query flow
 
-For `UpdateType.CallbackQuery`:
+For `UpdateType.CallbackQuery`, TelegramBotKit resolves **all** registered `IUpdatePayloadHandler<CallbackQuery>` and invokes them **sequentially** (order = DI registration).
+
+The diagram below shows the **built-in** `CallbackQueryUpdateHandler`:
 
 ```mermaid
 flowchart TD
