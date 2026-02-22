@@ -19,24 +19,30 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: |
-            10.0.x
+          # Если тебе реально нужен .NET 10 preview — оставь preview.
+          # Если не нужен — убери dotnet-quality.
+          dotnet-version: 10.0.x
           dotnet-quality: preview
-          cache: true
 
-      - name: Restore
-        run: dotnet restore
+          # Кэш NuGet через lock-файлы
+          cache: true
+          cache-dependency-path: |
+            **/packages.lock.json
+
+      - name: Restore (locked)
+        run: dotnet restore --locked-mode
 
       - name: Build
         run: dotnet build -c Release --no-restore
 
       - name: Pack (all packages)
         run: |
+          set -euo pipefail
           mkdir -p artifacts
           for proj in src/*/*.csproj; do
             echo "Packing $proj"
@@ -48,9 +54,11 @@ jobs:
         with:
           name: nuget-packages
           path: artifacts/*.nupkg
+          if-no-files-found: error
 
       - name: Upload symbols
         uses: actions/upload-artifact@v4
         with:
           name: nuget-symbols
           path: artifacts/*.snupkg
+          if-no-files-found: ignore
