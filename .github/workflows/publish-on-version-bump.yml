@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  id-token: write  # нужно для NuGet Trusted Publishing (OIDC), если используешь NuGet/login
+  id-token: write
 
 jobs:
   publish:
@@ -19,35 +19,32 @@ jobs:
       ContinuousIntegrationBuild: true
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
 
-      # Секреты кладём в env, чтобы не было проблем с "secrets" в if
+      # secrets -> env (и дальше в if используем env.*)
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       NUGET_USER: ${{ secrets.NUGET_USER }}
 
-      # Какой пакет считаем "якорным" для проверки версии.
-      # Обычно это главный пакет репозитория.
+      # "якорный" пакет для проверки версии на nuget.org
       CHECK_PACKAGE_ID: TelegramBotKit
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # нужно, если будем создавать теги
+          fetch-depth: 0
 
-      # 1) Определяем текущую версию из Directory.Build.props
-      - name: Read version
+      - name: Read version from Directory.Build.props
         id: ver
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
+          import os
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
           p = Path("Directory.Build.props")
-          tree = ET.parse(p)
-          root = tree.getroot()
+          root = ET.parse(p).getroot()
 
-          # У .props обычно namespace отсутствует, но на всякий случай ищем по имени тега
           version = None
           for el in root.iter():
             if el.tag.endswith("Version") and (el.text or "").strip():
@@ -57,14 +54,11 @@ jobs:
           if not version:
             raise SystemExit("ERROR: <Version> not found in Directory.Build.props")
 
-          print(f"VERSION={version}")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
             f.write(f"version={version}\n")
+          print(f"Version: {version}")
           PY
-        env:
-          GITHUB_OUTPUT: ${{ github.output }}
 
-      # 2) Проверяем, опубликована ли уже эта версия на nuget.org
       - name: Check if version exists on nuget.org
         id: nugetcheck
         shell: bash
@@ -72,12 +66,11 @@ jobs:
           set -euo pipefail
           VERSION="${{ steps.ver.outputs.version }}"
           ID="${CHECK_PACKAGE_ID}"
-
-          # nuget v3 flatcontainer требует lowercase id
           ID_LC="$(echo "$ID" | tr '[:upper:]' '[:lower:]')"
           URL="https://api.nuget.org/v3-flatcontainer/${ID_LC}/index.json"
 
-          echo "Checking $ID $VERSION on $URL"
+          echo "Checking: $ID $VERSION"
+          echo "URL: $URL"
 
           python - <<'PY'
           import json, os, sys, urllib.request, urllib.error
@@ -90,11 +83,9 @@ jobs:
               data = r.read().decode("utf-8")
           except urllib.error.HTTPError as e:
             if e.code == 404:
-              # пакета ещё нет вообще
-              exists = False
-              print("Package not found on nuget.org (404).")
-              out = f"exists=false\n"
-              open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8").write(out)
+              # пакета ещё нет на nuget.org
+              open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8").write("exists=false\n")
+              print("Package not found (404).")
               sys.exit(0)
             raise
 
@@ -102,24 +93,21 @@ jobs:
           versions = set(obj.get("versions", []))
           exists = version in versions
 
-          print(f"Exists: {exists}")
           open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8").write(f"exists={'true' if exists else 'false'}\n")
+          print("Exists:", exists)
           PY
         env:
-          URL: ${{ format('https://api.nuget.org/v3-flatcontainer/{0}/index.json', toLower(env.CHECK_PACKAGE_ID)) }}
+          URL: ${{ '' }} # не используем expressions для URL
           VERSION: ${{ steps.ver.outputs.version }}
-          GITHUB_OUTPUT: ${{ github.output }}
 
-      # 3) Если версия уже опубликована — выходим
       - name: Skip publish (already exists)
         if: steps.nugetcheck.outputs.exists == 'true'
         shell: bash
         run: |
-          echo "Version ${{ steps.ver.outputs.version }} of $CHECK_PACKAGE_ID is already published. Skipping."
+          echo "Already published: $CHECK_PACKAGE_ID ${{ steps.ver.outputs.version }}. Skipping."
+          exit 0
 
-      # 4) Ставим .NET только если реально нужно публиковать
       - name: Setup .NET
-        if: steps.nugetcheck.outputs.exists != 'true'
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
@@ -128,9 +116,7 @@ jobs:
           cache-dependency-path: |
             **/packages.lock.json
 
-      # 5) Restore/Build/Pack только src (чтобы samples не ломали locked-mode)
       - name: Restore (locked) - src only
-        if: steps.nugetcheck.outputs.exists != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -140,7 +126,6 @@ jobs:
           done
 
       - name: Build - src only
-        if: steps.nugetcheck.outputs.exists != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -150,7 +135,6 @@ jobs:
           done
 
       - name: Pack - src only
-        if: steps.nugetcheck.outputs.exists != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -160,9 +144,7 @@ jobs:
             dotnet pack "$proj" -c Release -o artifacts --no-build
           done
 
-      # 6) Валидируем, что есть чем публиковать
       - name: Validate NuGet publish settings
-        if: steps.nugetcheck.outputs.exists != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -171,17 +153,14 @@ jobs:
             exit 1
           fi
 
-      # 7) Trusted Publishing (OIDC), если API key не задан
       - name: NuGet login (Trusted Publishing / OIDC)
-        if: steps.nugetcheck.outputs.exists != 'true' && env.NUGET_API_KEY == '' && env.NUGET_USER != ''
+        if: env.NUGET_API_KEY == '' && env.NUGET_USER != ''
         uses: NuGet/login@v1
         id: nugetlogin
         with:
           user: ${{ env.NUGET_USER }}
 
-      # 8) Публикация
       - name: Publish to nuget.org
-        if: steps.nugetcheck.outputs.exists != 'true'
         shell: bash
         env:
           OIDC_KEY: ${{ steps.nugetlogin.outputs.key }}
@@ -192,9 +171,8 @@ jobs:
           if [ -z "$KEY" ]; then
             KEY="${OIDC_KEY:-}"
           fi
-
           if [ -z "$KEY" ]; then
-            echo "NuGet API key is empty (neither classic key nor OIDC key was obtained)." >&2
+            echo "NuGet API key is empty." >&2
             exit 1
           fi
 
@@ -203,15 +181,13 @@ jobs:
             echo "Pushing $f"
             dotnet nuget push "$f" -k "$KEY" -s "$NUGET_SOURCE" --skip-duplicate
           done
-
           for f in artifacts/*.snupkg; do
             echo "Pushing $f"
             dotnet nuget push "$f" -k "$KEY" -s "$NUGET_SOURCE" --skip-duplicate
           done
 
-      # 9) (Опционально) Тег + GitHub Release
+      # OPTIONAL: tag + GitHub release
       - name: Create tag vX.Y.Z (optional)
-        if: steps.nugetcheck.outputs.exists != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -219,7 +195,7 @@ jobs:
           TAG="v$VERSION"
 
           if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG already exists. Skipping tag creation."
+            echo "Tag $TAG already exists. Skipping."
             exit 0
           fi
 
@@ -229,7 +205,6 @@ jobs:
           git push origin "$TAG"
 
       - name: Create GitHub Release (optional)
-        if: steps.nugetcheck.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
