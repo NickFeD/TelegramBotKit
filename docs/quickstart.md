@@ -70,7 +70,90 @@ var host = builder.Build();
 await host.RunAsync();
 ```
 
-## 4) Add a command
+## 4) Using a custom HttpClient
+
+`AddTelegramBotKit(...)` also supports passing a custom `HttpClient`.
+This is useful when you want to configure:
+
+- proxy settings
+- request timeout
+- custom delegating handlers
+- `IHttpClientFactory` integration
+
+> Prefer `IHttpClientFactory` for production applications.
+> Passing a pre-created `HttpClient` is fine for simple scenarios and tests.
+
+### Option A: pass a ready HttpClient
+
+```csharp
+using Microsoft.Extensions.Hosting;
+using TelegramBotKit.DependencyInjection;
+using TelegramBotKit.Hosting;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+var httpClient = new HttpClient
+{
+    Timeout = TimeSpan.FromSeconds(30)
+};
+
+var bot = builder.Services.AddTelegramBotKit(
+    opt => builder.Configuration.GetSection("TelegramBotKit").Bind(opt),
+    httpClient);
+
+builder.Services.AddCommands();
+bot.UseQueuedMessageSender();
+builder.Services.AddTelegramBotKitPolling();
+
+var host = builder.Build();
+await host.RunAsync();
+```
+
+### Option B: use IHttpClientFactory
+
+Using `IHttpClientFactory` is recommended for most applications.
+
+```csharp
+using Microsoft.Extensions.Hosting;
+using TelegramBotKit.DependencyInjection;
+using TelegramBotKit.Hosting;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+builder.Services.AddHttpClient("TelegramBotKit", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+var bot = builder.Services.AddTelegramBotKit(
+    opt => builder.Configuration.GetSection("TelegramBotKit").Bind(opt),
+    sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("TelegramBotKit"));
+
+builder.Services.AddCommands();
+bot.UseQueuedMessageSender();
+builder.Services.AddTelegramBotKitPolling();
+
+var host = builder.Build();
+await host.RunAsync();
+```
+
+### Factory behavior
+
+The overload below accepts a nullable `HttpClient`:
+
+```csharp
+AddTelegramBotKit(
+    Action<TelegramBotKitOptions> configure,
+    Func<IServiceProvider, HttpClient?> httpClientFactory)
+```
+
+If the factory returns `null`, TelegramBotKit falls back to the default `TelegramBotClient` constructor.
+
+## 5) Add a command
 
 ```csharp
 using Telegram.Bot.Types;

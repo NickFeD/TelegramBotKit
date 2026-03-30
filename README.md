@@ -90,6 +90,9 @@ var host = builder.Build();
 await host.RunAsync();
 ```
 
+> Need a custom `HttpClient` for proxy, timeout, or custom handlers?
+> See [Quick start](docs/quickstart.md#using-a-custom-httpclient).
+
 3. Add a command.
 
 ```csharp

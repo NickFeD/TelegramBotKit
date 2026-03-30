@@ -7,7 +7,9 @@ Everything else in the repository should be treated as implementation detail and
 
 ### Dependency injection / configuration
 - TelegramBotKit.DependencyInjection.TelegramBotKitServiceCollectionExtensions
-  - AddTelegramBotKit(...)
+  - AddTelegramBotKit(Action<TelegramBotKitOptions>)
+  - AddTelegramBotKit(Action<TelegramBotKitOptions>, HttpClient)
+  - AddTelegramBotKit(Action<TelegramBotKitOptions>, Func<IServiceProvider, HttpClient?>)
   - AddUpdateHandler<TPayload, THandler>(...)
   - AddCommands(...)
   - AddMessageCommand<TCommand>(...)

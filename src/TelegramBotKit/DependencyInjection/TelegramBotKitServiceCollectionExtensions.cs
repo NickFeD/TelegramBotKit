@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using System.Net.Http;
 using System.Reflection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -17,7 +18,6 @@ using TelegramBotKit.Routing;
 
 namespace TelegramBotKit.DependencyInjection;
 
-
 /// <summary>
 /// Provides a telegram bot kit service collection extensions.
 /// </summary>
@@ -26,23 +26,68 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     /// <summary>
     /// Adds the telegram bot kit.
     /// </summary>
+    /// <param name="services">Service collection.</param>
+    /// <param name="configure">Options configuration delegate.</param>
+    /// <returns>A <see cref="TelegramBotKitBuilder"/> instance for further configuration.</returns>
     public static TelegramBotKitBuilder AddTelegramBotKit(
         this IServiceCollection services,
         Action<TelegramBotKitOptions> configure)
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
-        if (configure is null) throw new ArgumentNullException(nameof(configure));
+        return AddTelegramBotKit(services, configure, static _ => null);
+    }
+
+    /// <summary>
+    /// Adds the telegram bot kit using a custom <see cref="HttpClient"/>.
+    /// </summary>
+    /// <param name="services">Service collection.</param>
+    /// <param name="configure">Options configuration delegate.</param>
+    /// <param name="httpClient">
+    /// Custom <see cref="HttpClient"/> used to construct <see cref="ITelegramBotClient"/>.
+    /// </param>
+    /// <returns>A <see cref="TelegramBotKitBuilder"/> instance for further configuration.</returns>
+    public static TelegramBotKitBuilder AddTelegramBotKit(
+        this IServiceCollection services,
+        Action<TelegramBotKitOptions> configure,
+        HttpClient httpClient)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        return AddTelegramBotKit(services, configure, _ => httpClient);
+    }
+
+    /// <summary>
+    /// Adds the telegram bot kit using a custom <see cref="HttpClient"/> factory.
+    /// </summary>
+    /// <param name="services">Service collection.</param>
+    /// <param name="configure">Options configuration delegate.</param>
+    /// <param name="httpClientFactory">
+    /// Factory used to resolve a custom <see cref="HttpClient"/> from the current <see cref="IServiceProvider"/>.
+    /// If the factory returns <see langword="null"/>, the default <see cref="TelegramBotClient"/> constructor is used.
+    /// </param>
+    /// <returns>A <see cref="TelegramBotKitBuilder"/> instance for further configuration.</returns>
+    public static TelegramBotKitBuilder AddTelegramBotKit(
+        this IServiceCollection services,
+        Action<TelegramBotKitOptions> configure,
+        Func<IServiceProvider, HttpClient?> httpClientFactory)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
 
         services.AddOptions<TelegramBotKitOptions>()
             .Configure(configure)
             .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<TelegramBotKitOptions>, TelegramBotKitOptionsValidator>();
 
-        services.AddSingleton<ITelegramBotClient>(sp =>
+        services.TryAddSingleton<ITelegramBotClient>(sp =>
         {
             var opt = sp.GetRequiredService<IOptions<TelegramBotKitOptions>>().Value;
             var clientOptions = new TelegramBotClientOptions(opt.Token);
-            return new TelegramBotClient(clientOptions);
+            var httpClient = httpClientFactory(sp);
+
+            return httpClient is null
+                ? new TelegramBotClient(clientOptions)
+                : new TelegramBotClient(clientOptions, httpClient);
         });
 
         services.TryAddSingleton<MessageSender>();
@@ -64,7 +109,7 @@ public static partial class TelegramBotKitServiceCollectionExtensions
 
         services.AddSingleton(sp => new MiddlewarePipeline(sp, builder.MiddlewareFactories));
 
-        services.AddSingleton<UpdateHandlerRegistry>(sp =>
+        services.AddSingleton(sp =>
         {
             var reg = new UpdateHandlerRegistry();
 
@@ -82,7 +127,6 @@ public static partial class TelegramBotKitServiceCollectionExtensions
         return builder;
     }
 
-
     /// <summary>
     /// Adds the update handler.
     /// </summary>
@@ -92,34 +136,32 @@ public static partial class TelegramBotKitServiceCollectionExtensions
         where TPayload : class
         where THandler : class, IUpdatePayloadHandler<TPayload>
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
+        ArgumentNullException.ThrowIfNull(services);
 
         services.Add(new ServiceDescriptor(typeof(IUpdatePayloadHandler<TPayload>), typeof(THandler), lifetime));
         return services;
     }
 
+    /// <summary>
+    /// Adds the telegram bot kit queued message sender.
+    /// </summary>
+    public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
+        this IServiceCollection services,
+        Action<QueuedMessageSenderOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
 
-/// <summary>
-/// Adds the telegram bot kit queued message sender.
-/// </summary>
-public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
-    this IServiceCollection services,
-    Action<QueuedMessageSenderOptions>? configure = null)
-{
-    if (services is null) throw new ArgumentNullException(nameof(services));
+        var opt = services.AddOptions<QueuedMessageSenderOptions>();
+        if (configure is not null)
+            opt.Configure(configure);
 
-    var opt = services.AddOptions<QueuedMessageSenderOptions>();
-    if (configure is not null)
-        opt.Configure(configure);
+        services.TryAddSingleton<MessageSender>();
+        services.TryAddSingleton<QueuedMessageSender>();
 
-    services.TryAddSingleton<MessageSender>();
+        services.Replace(ServiceDescriptor.Singleton<IMessageSender>(sp => sp.GetRequiredService<QueuedMessageSender>()));
 
-    services.TryAddSingleton<QueuedMessageSender>();
-
-    services.Replace(ServiceDescriptor.Singleton<IMessageSender>(sp => sp.GetRequiredService<QueuedMessageSender>()));
-
-    return services;
-}
+        return services;
+    }
 
     private static void MapDefaultUpdatePayloads(UpdateHandlerRegistry reg)
     {
@@ -128,8 +170,6 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         reg.Map<Message>(UpdateType.Message, static u => u.Message);
         reg.Map<CallbackQuery>(UpdateType.CallbackQuery, static u => u.CallbackQuery);
     }
-
-
 
     /// <summary>
     /// Registers a slash-message command (e.g. "/start") without assembly scanning (AOT-friendly).
@@ -145,8 +185,10 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         ServiceLifetime lifetime = ServiceLifetime.Transient)
         where TCommand : class, IMessageCommand
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
-        if (string.IsNullOrWhiteSpace(command)) throw new ArgumentException("Command is required.", nameof(command));
+        ArgumentNullException.ThrowIfNull(services);
+
+        if (string.IsNullOrWhiteSpace(command))
+            throw new ArgumentException("Command is required.", nameof(command));
 
         services.Add(new ServiceDescriptor(typeof(TCommand), typeof(TCommand), lifetime));
 
@@ -177,14 +219,22 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         ServiceLifetime lifetime = ServiceLifetime.Transient)
         where TCommand : class, ITextCommand
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
-        if (triggers is null) throw new ArgumentNullException(nameof(triggers));
-        if (triggers.Count == 0) throw new ArgumentException("At least one trigger is required.", nameof(triggers));
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(triggers);
+
+        var normalizedTriggers = triggers
+            .Where(static t => !string.IsNullOrWhiteSpace(t))
+            .Select(static t => t.Trim())
+            .Distinct(ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .ToArray();
+
+        if (normalizedTriggers.Length == 0)
+            throw new ArgumentException("At least one non-empty trigger is required.", nameof(triggers));
 
         services.Add(new ServiceDescriptor(typeof(TCommand), typeof(TCommand), lifetime));
 
         services.AddSingleton(new TextCommandDescriptor(
-            triggers,
+            normalizedTriggers,
             ignoreCase,
             static (message, ctx) =>
             {
@@ -209,8 +259,10 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         ServiceLifetime lifetime = ServiceLifetime.Transient)
         where TCommand : class, ICallbackCommand
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
-        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("Key is required.", nameof(key));
+        ArgumentNullException.ThrowIfNull(services);
+
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Key is required.", nameof(key));
 
         services.Add(new ServiceDescriptor(typeof(TCommand), typeof(TCommand), lifetime));
 
@@ -245,8 +297,10 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
 
         // 2) Fallback to reflection discovery
         if (!fallbackToReflection)
+        {
             throw new InvalidOperationException(
                 "No generated command registrations found. Install TelegramBotKit.Generators or enable reflection fallback.");
+        }
 
         return AddCommandsByReflection(services);
     }
@@ -272,7 +326,8 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
 
         try
         {
-            return asm.GetReferencedAssemblies().Any(r => string.Equals(r.Name, "TelegramBotKit", StringComparison.OrdinalIgnoreCase));
+            return asm.GetReferencedAssemblies()
+                .Any(r => string.Equals(r.Name, "TelegramBotKit", StringComparison.OrdinalIgnoreCase));
         }
         catch
         {
@@ -300,7 +355,8 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
                 if (t.IsAbstract || t.IsInterface) continue;
                 if (!typeof(ICommand).IsAssignableFrom(t)) continue;
 
-                var hasRoleAttr = t.GetCustomAttributes(typeof(MessageCommandAttribute), inherit: false).Length > 0
+                var hasRoleAttr =
+                    t.GetCustomAttributes(typeof(MessageCommandAttribute), inherit: false).Length > 0
                     || t.GetCustomAttributes(typeof(TextCommandAttribute), inherit: false).Length > 0
                     || t.GetCustomAttributes(typeof(CallbackCommandAttribute), inherit: false).Length > 0;
 
@@ -310,7 +366,10 @@ public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         }
     }
 
-    private static void AddCommandByType(IServiceCollection services, Type commandType, ServiceLifetime lifetime = ServiceLifetime.Transient)
+    private static void AddCommandByType(
+        IServiceCollection services,
+        Type commandType,
+        ServiceLifetime lifetime = ServiceLifetime.Transient)
     {
         services.Add(new ServiceDescriptor(commandType, commandType, lifetime));
 

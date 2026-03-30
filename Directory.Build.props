@@ -2,7 +2,7 @@
 <Project>
   <PropertyGroup>
     <!-- Shared NuGet metadata for all packable projects -->
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
 
     <Authors>NickFeD</Authors>
     <Company>NickFeD</Company>
