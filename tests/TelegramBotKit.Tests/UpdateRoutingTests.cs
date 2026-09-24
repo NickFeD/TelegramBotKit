@@ -137,6 +137,46 @@ public sealed class UpdateRoutingTests
         Assert.Equal(new[] { "A before", "B before", "message", "B after", "A after" }, trace.Events);
     }
 
+    [Fact]
+    public async Task Route_middleware_forwards_replacement_context_with_original_payload()
+    {
+        var (services, bot, trace) = Setup();
+        var originalPayload = Message("original");
+        var replacementUpdate = new Update { Message = Message("replacement") };
+        bot.Route(UpdateRoutes.Message).Use((ctx, next) => next(new BotContext(
+            replacementUpdate,
+            ctx.BotClient,
+            ctx.Sender,
+            ctx.Services,
+            ctx.CancellationToken))).HandleWith<MessageHandler>();
+        await using var provider = Build(services);
+
+        await provider.GetRequiredService<IUpdateDispatcher>()
+            .DispatchAsync(new Update { Message = originalPayload });
+
+        Assert.Same(originalPayload, trace.Payload);
+        Assert.Same(replacementUpdate, trace.ContextUpdate);
+    }
+
+    [Fact]
+    public async Task Route_payload_is_extracted_once()
+    {
+        var (services, bot, _) = Setup();
+        var extractions = 0;
+        var route = UpdateRoute.Create(UpdateType.EditedMessage, (Update update) =>
+        {
+            extractions++;
+            return update.EditedMessage;
+        });
+        bot.Route(route).Use((ctx, next) => next(ctx)).HandleWith<EditedHandler>();
+        await using var provider = Build(services);
+
+        await provider.GetRequiredService<IUpdateDispatcher>()
+            .DispatchAsync(new Update { EditedMessage = Message() });
+
+        Assert.Equal(1, extractions);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -179,6 +219,41 @@ public sealed class UpdateRoutingTests
         await using var provider = Build(services);
         await provider.GetRequiredService<IUpdateDispatcher>().DispatchAsync(new Update { EditedMessage = Message() });
         Assert.Equal(kind == "middleware" ? new[] { "route before", "fallback", "route after" } : new[] { "fallback" }, trace.Events);
+    }
+
+    [Fact]
+    public async Task Null_payload_skips_route_pipeline_inside_global_pipeline()
+    {
+        var (services, bot, trace) = Setup();
+        bot.UseMiddleware((Func<BotContext, BotContextDelegate, Task>)((ctx, next) =>
+            Around(trace, "global", ctx, next)));
+        bot.Route(UpdateRoute.Create<Message>(UpdateType.EditedMessage, _ => null))
+            .Use((ctx, next) => Around(trace, "route", ctx, next))
+            .HandleWith<ThrowingHandler>();
+        await using var provider = Build(services);
+
+        await provider.GetRequiredService<IUpdateDispatcher>()
+            .DispatchAsync(new Update { EditedMessage = Message() });
+
+        Assert.Equal(new[] { "global before", "fallback", "global after" }, trace.Events);
+    }
+
+    [Fact]
+    public async Task Route_without_handler_runs_middleware_around_fallback_inside_global_pipeline()
+    {
+        var (services, bot, trace) = Setup();
+        bot.UseMiddleware((Func<BotContext, BotContextDelegate, Task>)((ctx, next) =>
+            Around(trace, "global", ctx, next)));
+        bot.Route(UpdateRoutes.EditedMessage)
+            .Use((ctx, next) => Around(trace, "route", ctx, next));
+        await using var provider = Build(services);
+
+        await provider.GetRequiredService<IUpdateDispatcher>()
+            .DispatchAsync(new Update { EditedMessage = Message() });
+
+        Assert.Equal(
+            new[] { "global before", "route before", "fallback", "route after", "global after" },
+            trace.Events);
     }
 
     [Fact]
@@ -291,10 +366,17 @@ public sealed class UpdateRoutingTests
         public List<string> Events { get; } = new();
         public List<Guid> Scopes { get; } = new();
         public Message? Payload { get; set; }
+        public Update? ContextUpdate { get; set; }
     }
     public sealed class MessageHandler(Trace trace) : IUpdatePayloadHandler<Message>
     {
-        public Task HandleAsync(Message payload, BotContext ctx) { trace.Payload = payload; trace.Events.Add("message"); return Task.CompletedTask; }
+        public Task HandleAsync(Message payload, BotContext ctx)
+        {
+            trace.Payload = payload;
+            trace.ContextUpdate = ctx.Update;
+            trace.Events.Add("message");
+            return Task.CompletedTask;
+        }
     }
     public sealed class EditedHandler(Trace trace) : IUpdatePayloadHandler<Message>
     {

@@ -1,11 +1,13 @@
 # TelegramBotKit - Current State
 
-> Updated 2026-09-23.
+> Updated 2026-09-24.
 
 ## CURRENT
 
 - .NET 10 toolkit with core, optional Hosting, Routing and Generators packages.
 - Dispatch: per-update scope/context -> global middleware -> UpdateType registry -> typed extraction -> local pipeline -> single terminal/fallback -> unwind -> scope disposal.
+- A domain-independent internal `Pipeline<TContext>` is the sole composition kernel for global and route-local update middleware. Public middleware and typed handler contracts are façades over it.
+- Global execution uses `Pipeline<BotContext>`. Route execution uses a frozen, precompiled `Pipeline<UpdateRouteContext<TPayload>>` carrying the extracted payload and current bot context.
 - `UpdateRoute<TPayload>` binds identity, payload type and extraction; `UpdateRoutes` provides 23 built-in descriptors.
 - Custom descriptors are supported without catalog changes. Shared payload types do not share route ownership.
 - `Route(descriptor).Use<TMiddleware>().HandleWith<THandler>()` provides additive middleware and compile-time handler compatibility.
@@ -21,7 +23,7 @@
 
 `tests/TelegramBotKit.Tests` covers route isolation, descriptor conflicts, duplicate terminals, generic constraints, custom routes, pipeline ordering/short-circuit/unwind, exceptions, fallbacks, scope disposal, catalog coverage and command/conversation compatibility.
 Run `dotnet test TelegramBotKit.slnx -c Release` with .NET 10.
-Verified: all 38 tests pass (22 existing + 16 added cases). Core, Hosting, Routing and Generators build in Release. Of the 16 new cases, 11 fail against the saved pre-fix core/Hosting assemblies, confirming the regressions; the other 5 preserve existing behavior. Samples were not changed by this fix.
+Verified: all 47 tests pass. Core, Hosting, Routing, Generators and the sample build in Release.
 
 ## Compatibility
 
@@ -31,4 +33,4 @@ The existing SourceLink build dependency emits NU1902 for Microsoft.Build.Tasks.
 
 ## PLANNED
 
-Webhook support remains separate. Update-route registration and multi-terminal questions are resolved by D-018 through D-020.
+Webhook support remains separate. Update-route registration, multi-terminal behavior and internal pipeline composition are resolved by D-018 through D-021. A possible public typed `UpdateRouteContext<TPayload>` / `IUpdateRouteMiddleware<TPayload>` remains a separate future design question.

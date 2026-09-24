@@ -167,9 +167,27 @@ Built-in message/callback terminals are installed only for routes not explicitly
 Explicit routes own their complete processing; empty or middleware-only routes end in update fallback.
 Missing routes and null payloads also invoke update fallback. Global and local middleware resolve from the update scope, which is disposed after unwind.
 
+## D-021 - Internal generic pipeline kernel
+
+**Status: CURRENT**
+
+Pipeline composition is implemented once by the domain-independent internal
+`Pipeline<TContext>` primitive. It owns ordered node composition, nested `next`
+semantics and terminal delegate construction without depending on TelegramBotKit
+domain types.
+
+Global update middleware executes through `Pipeline<BotContext>`. Route-local
+processing extracts its typed payload once and executes through
+`Pipeline<UpdateRouteContext<TPayload>>`; the route pipeline is compiled when the
+registry freezes.
+
+`IUpdateMiddleware` and `IUpdatePayloadHandler<TPayload>` remain public
+TelegramBotKit façades adapted to the internal node and terminal model. The kernel,
+its nodes and the typed route execution context remain internal API.
+
 ## Registration and delivery implementation notes
 
-D-018 and D-020 are unchanged. A single service collection owns one shared builder/registry across all `AddTelegramBotKit` calls. Failed DI registration does not commit terminal/middleware changes.
+D-018 through D-021 remain in effect. A single service collection owns one shared builder/registry across all `AddTelegramBotKit` calls. Failed DI registration does not commit terminal/middleware changes.
 Core dispatcher checks conversation ownership from the registry after global middleware for both direct and polling delivery. Hosting only schedules execution. Active built-in conversation replies can bypass the occupied actor/DOP slot to unblock the waiting command; stale waiter candidates return to scheduled routing without rerunning middleware.
 
 ## REPLACED

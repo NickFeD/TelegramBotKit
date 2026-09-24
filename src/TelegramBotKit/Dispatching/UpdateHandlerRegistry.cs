@@ -3,6 +3,7 @@ using TelegramBotKit.Middleware;
 using Microsoft.Extensions.DependencyInjection;
 using TelegramBotKit.Fallbacks;
 using TelegramBotKit.Handlers;
+using TelegramBotKit.Pipelines;
 
 namespace TelegramBotKit.Dispatching;
 
@@ -41,7 +42,15 @@ internal sealed class UpdateHandlerRegistry
         return false;
     }
 
-    public void Freeze() => _frozen = true;
+    public void Freeze()
+    {
+        if (_frozen) return;
+
+        foreach (var route in _routes.Values)
+            route.Compile();
+
+        _frozen = true;
+    }
     internal void EnsureMutable()
     {
         if (_frozen) throw new InvalidOperationException("UpdateHandlerRegistry is frozen. Configure it before bot starts.");
@@ -54,6 +63,7 @@ internal sealed class UpdateHandlerRegistry
 internal interface IRouteRegistration
 {
     Type? TerminalType { get; }
+    void Compile();
     Task InvokeAsync(BotContext ctx);
 }
 
@@ -61,15 +71,19 @@ internal sealed class RouteRegistration<TPayload>(UpdateHandlerRegistry registry
     : IRouteRegistration where TPayload : class
 {
     internal UpdateRoute<TPayload> Descriptor { get; } = descriptor;
-    private readonly List<Func<BotContext, BotContextDelegate, Task>> _middleware = new();
+    private readonly List<IPipelineNode<UpdateRouteContext<TPayload>>> _nodes = new();
     private TerminalDescriptor? _terminal;
+    private PipelineDelegate<UpdateRouteContext<TPayload>>? _app;
     public Type? TerminalType => _terminal?.HandlerType;
     internal void EnsureMutable() => registry.EnsureMutable();
 
     internal void Use(Func<BotContext, BotContextDelegate, Task> middleware)
     {
         registry.EnsureMutable();
-        _middleware.Add(middleware);
+        _nodes.Add(new DelegatePipelineNode<UpdateRouteContext<TPayload>>(
+            (routeContext, next) => middleware(
+                routeContext.BotContext,
+                nextContext => next(routeContext.WithBotContext(nextContext)))));
     }
 
     internal void ValidateTerminal<THandler>() where THandler : class, IUpdatePayloadHandler<TPayload>
@@ -89,20 +103,22 @@ internal sealed class RouteRegistration<TPayload>(UpdateHandlerRegistry registry
             ctx.Services.GetRequiredService<THandler>().HandleAsync(payload, ctx));
     }
 
+    public void Compile()
+    {
+        var terminal = _terminal;
+        _app = new Pipeline<UpdateRouteContext<TPayload>>(_nodes).Build(routeContext =>
+            terminal is null
+                ? UpdateHandlerRegistry.FallbackAsync(routeContext.BotContext)
+                : terminal.Invoke(routeContext.Payload, routeContext.BotContext));
+    }
+
     public Task InvokeAsync(BotContext ctx)
     {
         var payload = Descriptor.PayloadSelector(ctx.Update);
         if (payload is null) return UpdateHandlerRegistry.FallbackAsync(ctx);
-        BotContextDelegate app = context => _terminal is null
-            ? UpdateHandlerRegistry.FallbackAsync(context)
-            : _terminal.Invoke(payload, context);
-        for (var i = _middleware.Count - 1; i >= 0; i--)
-        {
-            var middleware = _middleware[i];
-            var next = app;
-            app = context => middleware(context, next);
-        }
-        return app(ctx);
+
+        return (_app ?? throw new InvalidOperationException("Update route is not compiled."))(
+            new UpdateRouteContext<TPayload>(ctx, payload));
     }
 
     private sealed record TerminalDescriptor(Type HandlerType, Func<TPayload, BotContext, Task> Invoke);
