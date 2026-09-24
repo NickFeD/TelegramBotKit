@@ -24,21 +24,57 @@ public sealed class UpdateRouteBuilder<TPayload> where TPayload : class
         return this;
     }
 
-    /// <summary>Adds middleware resolved from the per-update scope.</summary>
+    /// <summary>
+    /// Adds typed route-local middleware resolved from the per-update scope.
+    /// The middleware receives the payload selected for this route and may short-circuit its terminal.
+    /// </summary>
     public UpdateRouteBuilder<TPayload> Use<TMiddleware>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        where TMiddleware : class, IUpdateRouteMiddleware<TPayload>
+    {
+        _registration.EnsureMutable();
+        _services.TryAdd(new ServiceDescriptor(typeof(TMiddleware), typeof(TMiddleware), lifetime));
+        _registration.Use(static (ctx, next) =>
+            ctx.BotContext.Services.GetRequiredService<TMiddleware>().InvokeAsync(ctx, next));
+        return this;
+    }
+
+    /// <summary>
+    /// Adds inline typed route-local middleware in registration order, outermost first.
+    /// The delegate receives the selected payload and may omit the continuation to short-circuit the route.
+    /// </summary>
+    public UpdateRouteBuilder<TPayload> Use(
+        Func<UpdateRouteContext<TPayload>, UpdateRouteDelegate<TPayload>, Task> middleware)
+    {
+        ArgumentNullException.ThrowIfNull(middleware);
+        _registration.Use(middleware);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds update-wide middleware to this route through the compatibility adapter.
+    /// Prefer <see cref="Use{TMiddleware}(ServiceLifetime)"/> for typed route-local middleware.
+    /// </summary>
+    public UpdateRouteBuilder<TPayload> UseUpdateMiddleware<TMiddleware>(
+        ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TMiddleware : class, IUpdateMiddleware
     {
         _registration.EnsureMutable();
         _services.TryAdd(new ServiceDescriptor(typeof(TMiddleware), typeof(TMiddleware), lifetime));
-        _registration.Use(static (ctx, next) => ctx.Services.GetRequiredService<TMiddleware>().InvokeAsync(ctx, next));
+        _registration.UseUpdateMiddleware(static (ctx, next) =>
+            ctx.Services.GetRequiredService<TMiddleware>().InvokeAsync(ctx, next));
         return this;
     }
 
-    /// <summary>Adds inline route middleware in registration order, outermost first.</summary>
-    public UpdateRouteBuilder<TPayload> Use(Func<BotContext, BotContextDelegate, Task> middleware)
+    /// <summary>
+    /// Adds an inline <see cref="IUpdateMiddleware"/>-shaped component to this route through the
+    /// compatibility adapter. Prefer <see cref="Use(Func{UpdateRouteContext{TPayload}, UpdateRouteDelegate{TPayload}, Task})"/>
+    /// when the middleware needs route payload typing.
+    /// </summary>
+    public UpdateRouteBuilder<TPayload> UseUpdateMiddleware(
+        Func<BotContext, BotContextDelegate, Task> middleware)
     {
         ArgumentNullException.ThrowIfNull(middleware);
-        _registration.Use(middleware);
+        _registration.UseUpdateMiddleware(middleware);
         return this;
     }
 }

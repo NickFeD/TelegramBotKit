@@ -46,17 +46,21 @@ semantics and terminal delegate construction; it has no Telegram, routing, DI or
 scope responsibilities.
 
 The global path adapts `IUpdateMiddleware` to `IPipelineNode<BotContext>`. Each
-route compiles a `Pipeline<UpdateRouteContext<TPayload>>` when the registry is
-frozen. The internal route context carries the already extracted payload together
-with the current `BotContext`; the typed handler or update fallback is the terminal.
-`IUpdateMiddleware` and `IUpdatePayloadHandler<TPayload>` remain public
-TelegramBotKit façades rather than pipeline-kernel contracts.
+route adapts `IUpdateRouteMiddleware<TPayload>` to nodes and compiles a
+`Pipeline<UpdateRouteContext<TPayload>>` when the registry is frozen. The public,
+read-only route context carries the already extracted payload together with the
+current `BotContext`; the typed handler or update fallback is the terminal.
+`IUpdateMiddleware`, `IUpdateRouteMiddleware<TPayload>` and
+`IUpdatePayloadHandler<TPayload>` are TelegramBotKit façades rather than
+pipeline-kernel contracts.
 
 ## 3. Middleware
 
 ### CURRENT
 
-Основной контракт — `IUpdateMiddleware`.
+`IUpdateMiddleware` is the global update-wide middleware contract.
+`IUpdateRouteMiddleware<TPayload>` is the route-local contract and receives the
+selected payload through `UpdateRouteContext<TPayload>`.
 
 Middleware предназначен для cross-cutting concerns:
 
@@ -87,7 +91,7 @@ Repeated `Route` calls with the same descriptor compose the same route. A differ
 Runtime selection uses `Update.Type`, extracts the payload once, then enters the local pipeline.
 Message and EditedMessage can both carry `Message` without sharing terminals or middleware.
 DI constructs concrete handler/middleware types with their configured lifetimes; service enumeration and DI registration order do not determine route ownership.
-Global and route middleware use `IUpdateMiddleware` and nested `next(ctx)` semantics, including short-circuiting and exception propagation.
+Global middleware uses `IUpdateMiddleware`; route-local middleware uses `IUpdateRouteMiddleware<TPayload>`. Both preserve nested `next(context)` semantics, including short-circuiting and exception propagation.
 Class middleware is resolved from the per-update scope. Scope disposal is asynchronous and occurs after unwind, including failures.
 Configuration ends when the registry is resolved. Freeze snapshots and compiles each route pipeline; subsequent route mutations are rejected.
 Repeated `AddTelegramBotKit` calls on one service collection return the same builder/configuration state; option delegates accumulate, while runtime registrations are installed once.

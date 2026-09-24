@@ -6,11 +6,12 @@
 
 - .NET 10 toolkit with core, optional Hosting, Routing and Generators packages.
 - Dispatch: per-update scope/context -> global middleware -> UpdateType registry -> typed extraction -> local pipeline -> single terminal/fallback -> unwind -> scope disposal.
-- A domain-independent internal `Pipeline<TContext>` is the sole composition kernel for global and route-local update middleware. Public middleware and typed handler contracts are façades over it.
-- Global execution uses `Pipeline<BotContext>`. Route execution uses a frozen, precompiled `Pipeline<UpdateRouteContext<TPayload>>` carrying the extracted payload and current bot context.
+- A domain-independent internal `Pipeline<TContext>` is the sole composition kernel for global and route-local update middleware. Public global middleware, typed route middleware and typed handler contracts are façades over it.
+- Global execution uses `Pipeline<BotContext>`. Route execution uses a frozen, precompiled `Pipeline<UpdateRouteContext<TPayload>>` carrying the exact extracted payload and current bot context.
 - `UpdateRoute<TPayload>` binds identity, payload type and extraction; `UpdateRoutes` provides 23 built-in descriptors.
 - Custom descriptors are supported without catalog changes. Shared payload types do not share route ownership.
-- `Route(descriptor).Use<TMiddleware>().HandleWith<THandler>()` provides additive middleware and compile-time handler compatibility.
+- `Route(descriptor).Use<TMiddleware>().HandleWith<THandler>()` propagates `TPayload` through `IUpdateRouteMiddleware<TPayload>` and `IUpdatePayloadHandler<TPayload>` with compile-time compatibility.
+- Inline route `.Use(...)` is typed. Existing `IUpdateMiddleware` components can be attached explicitly through `UseUpdateMiddleware(...)`; global middleware remains unchanged.
 - Duplicate terminals and conflicting descriptors fail early, including across repeated AddTelegramBotKit calls sharing one service collection. Failed DI registrations do not mutate routes. Registry/node implementation stays internal.
 - `IUpdatePayloadHandler<TPayload>` is retained. Payload-only `Map` and `AddUpdateHandler` APIs are removed.
 - Default Message/CallbackQuery routes retain command behavior; expected conversation responses still take precedence.
@@ -23,7 +24,7 @@
 
 `tests/TelegramBotKit.Tests` covers route isolation, descriptor conflicts, duplicate terminals, generic constraints, custom routes, pipeline ordering/short-circuit/unwind, exceptions, fallbacks, scope disposal, catalog coverage and command/conversation compatibility.
 Run `dotnet test TelegramBotKit.slnx -c Release` with .NET 10.
-Verified: all 47 tests pass. Core, Hosting, Routing, Generators and the sample build in Release.
+Verified: all 51 tests pass. Core, Hosting, Routing, Generators and the sample build in Release.
 
 ## Compatibility
 
@@ -33,4 +34,4 @@ The existing SourceLink build dependency emits NU1902 for Microsoft.Build.Tasks.
 
 ## PLANNED
 
-Webhook support remains separate. Update-route registration, multi-terminal behavior and internal pipeline composition are resolved by D-018 through D-021. A possible public typed `UpdateRouteContext<TPayload>` / `IUpdateRouteMiddleware<TPayload>` remains a separate future design question.
+Webhook support remains separate. Update-route registration, terminal ownership, internal composition and the typed route middleware façade are resolved by D-018 through D-022. The core update-pipeline architecture is complete; further work is API, documentation and release polish.

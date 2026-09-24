@@ -40,7 +40,9 @@ public sealed class UpdateRoutingTests
         var (services, bot, trace) = Setup();
         bot.Route(UpdateRoutes.Message).Use((ctx, next) => { trace.Events.Add("message route"); return next(ctx); })
             .HandleWith<MessageHandler>();
-        bot.Route(UpdateRoutes.EditedMessage).HandleWith<EditedHandler>();
+        bot.Route(UpdateRoutes.EditedMessage)
+            .Use((ctx, next) => { trace.Events.Add("edited route"); return next(ctx); })
+            .HandleWith<EditedHandler>();
         // Old interface registrations cannot affect ownership.
         services.AddScoped<IUpdatePayloadHandler<Message>, ThrowingHandler>();
         await using var provider = Build(services);
@@ -49,8 +51,39 @@ public sealed class UpdateRoutingTests
         var edited = Message("edited");
         await dispatcher.DispatchAsync(new Update { Message = original });
         await dispatcher.DispatchAsync(new Update { EditedMessage = edited });
-        Assert.Equal(new[] { "message route", "message", "edited" }, trace.Events);
+        Assert.Equal(new[] { "message route", "message", "edited route", "edited" }, trace.Events);
         Assert.Same(edited, trace.Payload);
+    }
+
+    [Fact]
+    public async Task Typed_route_middleware_receives_exact_payload_instance()
+    {
+        var (services, bot, trace) = Setup();
+        bot.Route(UpdateRoutes.Message)
+            .Use<PayloadCapturingMiddleware>()
+            .HandleWith<MessageHandler>();
+        await using var provider = Build(services);
+        var payload = Message();
+
+        await provider.GetRequiredService<IUpdateDispatcher>()
+            .DispatchAsync(new Update { Message = payload });
+
+        Assert.Same(payload, trace.MiddlewarePayload);
+        Assert.Same(payload, trace.Payload);
+    }
+
+    [Fact]
+    public void Typed_route_context_has_minimal_read_only_public_surface()
+    {
+        var type = typeof(UpdateRouteContext<Message>);
+        var properties = type.GetProperties(
+            System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.DeclaredOnly);
+
+        Assert.Empty(type.GetConstructors());
+        Assert.Equal(new[] { "BotContext", "Payload" }, properties.Select(p => p.Name).OrderBy(n => n));
+        Assert.All(properties, property => Assert.False(property.CanWrite));
     }
 
     [Fact]
@@ -101,12 +134,24 @@ public sealed class UpdateRoutingTests
     }
 
     [Fact]
+    public void Route_middleware_generic_constraint_rejects_wrong_payload()
+    {
+        var method = typeof(UpdateRouteBuilder<Message>).GetMethods()
+            .Single(candidate => candidate.Name == "Use" && candidate.IsGenericMethodDefinition);
+        Assert.NotNull(method.MakeGenericMethod(typeof(MessageRouteMiddleware)));
+        Assert.Throws<ArgumentException>(() => method.MakeGenericMethod(typeof(QueryRouteMiddleware)));
+    }
+
+    [Fact]
     public async Task Custom_descriptor_extracts_payload_and_uses_normal_pipelines()
     {
         var (services, bot, trace) = Setup();
         UpdateRoute<Message> custom = UpdateRoute.Create(UpdateType.EditedMessage, u => u.EditedMessage);
         bot.UseMiddleware((Func<BotContext, BotContextDelegate, Task>)((ctx, next) => Around(trace, "global", ctx, next)));
-        bot.Route(custom).Use((ctx, next) => Around(trace, "route", ctx, next)).HandleWith<EditedHandler>();
+        bot.Route(custom)
+            .Use<MessageRouteMiddleware>()
+            .Use((ctx, next) => Around(trace, "route", ctx, next))
+            .HandleWith<EditedHandler>();
         await using var provider = Build(services);
         var payload = Message();
         await provider.GetRequiredService<IUpdateDispatcher>().DispatchAsync(new Update { EditedMessage = payload });
@@ -130,11 +175,15 @@ public sealed class UpdateRoutingTests
     public async Task Repeated_route_configuration_adds_nested_middleware_in_order()
     {
         var (services, bot, trace) = Setup();
+        bot.UseMiddleware((Func<BotContext, BotContextDelegate, Task>)((ctx, next) =>
+            Around(trace, "global", ctx, next)));
         bot.Route(UpdateRoutes.Message).Use((ctx, next) => Around(trace, "A", ctx, next));
         bot.Route(UpdateRoutes.Message).Use((ctx, next) => Around(trace, "B", ctx, next)).HandleWith<MessageHandler>();
         await using var provider = Build(services);
         await provider.GetRequiredService<IUpdateDispatcher>().DispatchAsync(new Update { Message = Message() });
-        Assert.Equal(new[] { "A before", "B before", "message", "B after", "A after" }, trace.Events);
+        Assert.Equal(
+            new[] { "global before", "A before", "B before", "message", "B after", "A after", "global after" },
+            trace.Events);
     }
 
     [Fact]
@@ -143,7 +192,7 @@ public sealed class UpdateRoutingTests
         var (services, bot, trace) = Setup();
         var originalPayload = Message("original");
         var replacementUpdate = new Update { Message = Message("replacement") };
-        bot.Route(UpdateRoutes.Message).Use((ctx, next) => next(new BotContext(
+        bot.Route(UpdateRoutes.Message).UseUpdateMiddleware((ctx, next) => next(new BotContext(
             replacementUpdate,
             ctx.BotClient,
             ctx.Sender,
@@ -156,6 +205,21 @@ public sealed class UpdateRoutingTests
 
         Assert.Same(originalPayload, trace.Payload);
         Assert.Same(replacementUpdate, trace.ContextUpdate);
+    }
+
+    [Fact]
+    public async Task Update_middleware_can_be_attached_to_route_through_named_adapter()
+    {
+        var (services, bot, trace) = Setup();
+        bot.Route(UpdateRoutes.Message)
+            .UseUpdateMiddleware<LegacyRouteMiddleware>()
+            .HandleWith<MessageHandler>();
+        await using var provider = Build(services);
+
+        await provider.GetRequiredService<IUpdateDispatcher>()
+            .DispatchAsync(new Update { Message = Message() });
+
+        Assert.Equal(new[] { "legacy before", "message", "legacy after" }, trace.Events);
     }
 
     [Fact]
@@ -183,10 +247,18 @@ public sealed class UpdateRoutingTests
     public async Task Middleware_can_short_circuit(bool global)
     {
         var (services, bot, trace) = Setup();
-        Func<BotContext, BotContextDelegate, Task> stop = (_, _) => { trace.Events.Add("stop"); return Task.CompletedTask; };
-        if (global) bot.UseMiddleware(stop);
+        Func<BotContext, BotContextDelegate, Task> globalStop = (_, _) =>
+        {
+            trace.Events.Add("stop");
+            return Task.CompletedTask;
+        };
+        if (global) bot.UseMiddleware(globalStop);
         var route = bot.Route(UpdateRoutes.Message);
-        if (!global) route.Use(stop);
+        if (!global) route.Use((_, _) =>
+        {
+            trace.Events.Add("stop");
+            return Task.CompletedTask;
+        });
         route.HandleWith<MessageHandler>();
         await using var provider = Build(services);
         await provider.GetRequiredService<IUpdateDispatcher>().DispatchAsync(new Update { Message = Message() });
@@ -262,7 +334,7 @@ public sealed class UpdateRoutingTests
         var (services, bot, trace) = Setup();
         services.AddScoped<ScopedProbe>();
         bot.UseMiddleware<ScopedMiddleware>();
-        bot.Route(UpdateRoutes.Message).Use<ScopedMiddleware>().HandleWith<ScopedHandler>();
+        bot.Route(UpdateRoutes.Message).Use<ScopedRouteMiddleware>().HandleWith<ScopedHandler>();
         await using var provider = Build(services);
         var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
         await dispatcher.DispatchAsync(new Update { Message = Message() });
@@ -281,7 +353,7 @@ public sealed class UpdateRoutingTests
         services.AddScoped<ScopedProbe>();
         bot.Route(UpdateRoutes.Message).Use(async (ctx, next) =>
         {
-            var probe = ctx.Services.GetRequiredService<ScopedProbe>();
+            var probe = ctx.BotContext.Services.GetRequiredService<ScopedProbe>();
             try { await next(ctx); }
             finally { Assert.False(probe.Disposed); trace.Events.Add("unwind"); }
         }).HandleWith<ThrowingHandler>();
@@ -361,11 +433,21 @@ public sealed class UpdateRoutingTests
         finally { trace.Events.Add(name + " after"); }
     }
 
+    private static async Task Around<TPayload>(Trace trace, string name,
+        UpdateRouteContext<TPayload> ctx, UpdateRouteDelegate<TPayload> next)
+        where TPayload : class
+    {
+        trace.Events.Add(name + " before");
+        try { await next(ctx); }
+        finally { trace.Events.Add(name + " after"); }
+    }
+
     public sealed class Trace
     {
         public List<string> Events { get; } = new();
         public List<Guid> Scopes { get; } = new();
         public Message? Payload { get; set; }
+        public Message? MiddlewarePayload { get; set; }
         public Update? ContextUpdate { get; set; }
     }
     public sealed class MessageHandler(Trace trace) : IUpdatePayloadHandler<Message>
@@ -385,6 +467,25 @@ public sealed class UpdateRoutingTests
     public sealed class QueryHandler : IUpdatePayloadHandler<CallbackQuery>
     {
         public Task HandleAsync(CallbackQuery payload, BotContext ctx) => Task.CompletedTask;
+    }
+    public sealed class MessageRouteMiddleware : IUpdateRouteMiddleware<Message>
+    {
+        public Task InvokeAsync(UpdateRouteContext<Message> context, UpdateRouteDelegate<Message> next) =>
+            next(context);
+    }
+    public sealed class PayloadCapturingMiddleware(Trace trace) : IUpdateRouteMiddleware<Message>
+    {
+        public Task InvokeAsync(UpdateRouteContext<Message> context,
+            UpdateRouteDelegate<Message> next)
+        {
+            trace.MiddlewarePayload = context.Payload;
+            return next(context);
+        }
+    }
+    public sealed class QueryRouteMiddleware : IUpdateRouteMiddleware<CallbackQuery>
+    {
+        public Task InvokeAsync(UpdateRouteContext<CallbackQuery> context,
+            UpdateRouteDelegate<CallbackQuery> next) => next(context);
     }
     public sealed class TestException : Exception { }
     public sealed class ThrowingHandler : IUpdatePayloadHandler<Message>
@@ -427,6 +528,27 @@ public sealed class UpdateRoutingTests
         {
             trace.Scopes.Add(probe.Id);
             await next(ctx);
+            Assert.False(probe.Disposed);
+            trace.Events.Add("unwind");
+        }
+    }
+    public sealed class LegacyRouteMiddleware(Trace trace) : IUpdateMiddleware
+    {
+        public async Task InvokeAsync(BotContext context, BotContextDelegate next)
+        {
+            trace.Events.Add("legacy before");
+            await next(context);
+            trace.Events.Add("legacy after");
+        }
+    }
+    public sealed class ScopedRouteMiddleware(Trace trace, ScopedProbe probe)
+        : IUpdateRouteMiddleware<Message>
+    {
+        public async Task InvokeAsync(UpdateRouteContext<Message> context,
+            UpdateRouteDelegate<Message> next)
+        {
+            trace.Scopes.Add(probe.Id);
+            await next(context);
             Assert.False(probe.Disposed);
             trace.Events.Add("unwind");
         }

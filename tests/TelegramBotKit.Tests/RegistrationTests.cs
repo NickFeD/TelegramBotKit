@@ -29,10 +29,10 @@ public sealed class RegistrationTests
         var first = Configure(services);
         var trace = new List<string>();
         first.UseMiddleware((Func<BotContext, BotContextDelegate, Task>)((ctx, next) => Around("global A", ctx, next)));
-        first.Route(UpdateRoutes.Message).Use((ctx, next) => Around("local A", ctx, next)).HandleWith<MessageHandler>();
+        first.Route(UpdateRoutes.Message).Use((ctx, next) => RouteAround("local A", ctx, next)).HandleWith<MessageHandler>();
         var second = services.AddTelegramBotKit(o => o.Polling.Limit = 42);
         second.UseMiddleware((Func<BotContext, BotContextDelegate, Task>)((ctx, next) => Around("global B", ctx, next)));
-        second.Route(UpdateRoutes.Message).Use((ctx, next) => Around("local B", ctx, next));
+        second.Route(UpdateRoutes.Message).Use((ctx, next) => RouteAround("local B", ctx, next));
         second.Route(UpdateRoutes.EditedMessage).HandleWith<EditedHandler>();
         Assert.Same(first, second);
         Assert.Single(services, d => d.ServiceType == typeof(IUpdateDispatcher));
@@ -47,6 +47,9 @@ public sealed class RegistrationTests
         Assert.Equal(new[] { "message", "edited" }, provider.GetRequiredService<Trace>().Events);
 
         async Task Around(string name, BotContext ctx, BotContextDelegate next)
+        { trace.Add(name + " before"); await next(ctx); trace.Add(name + " after"); }
+        async Task RouteAround(string name, UpdateRouteContext<Message> ctx,
+            UpdateRouteDelegate<Message> next)
         { trace.Add(name + " before"); await next(ctx); trace.Add(name + " after"); }
     }
 
@@ -146,14 +149,16 @@ public sealed class RegistrationTests
         Assert.Equal(new[] { "message" }, provider.GetRequiredService<Trace>().Events);
     }
 
-    private static async Task Wrap(string name, BotContext ctx, BotContextDelegate next)
+    private static async Task Wrap(string name, UpdateRouteContext<Message> ctx,
+        UpdateRouteDelegate<Message> next)
     {
-        var trace = ctx.Services.GetRequiredService<Trace>();
+        var trace = ctx.BotContext.Services.GetRequiredService<Trace>();
         trace.Events.Add(name + " before"); await next(ctx); trace.Events.Add(name + " after");
     }
-    public sealed class RecordingMiddleware : IUpdateMiddleware
+    public sealed class RecordingMiddleware : IUpdateRouteMiddleware<Message>
     {
-        public Task InvokeAsync(BotContext ctx, BotContextDelegate next) => Wrap("class", ctx, next);
+        public Task InvokeAsync(UpdateRouteContext<Message> ctx, UpdateRouteDelegate<Message> next) =>
+            Wrap("class", ctx, next);
     }
     private sealed class RejectingServices : Collection<ServiceDescriptor>, IServiceCollection
     {

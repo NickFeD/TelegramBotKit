@@ -2,6 +2,15 @@
 
 There are no remaining open questions from the update-routing redesign.
 
+## Resolved - typed route middleware
+
+`UpdateRoute<TPayload>` now propagates its payload type through
+`IUpdateRouteMiddleware<TPayload>`, the read-only `UpdateRouteContext<TPayload>` and
+`IUpdatePayloadHandler<TPayload>`. Global `IUpdateMiddleware` remains update-wide;
+the explicitly named `UseUpdateMiddleware` API provides route compatibility for
+existing components. Both façades use the internal generic pipeline kernel.
+See D-022 in [DECISIONS.md](DECISIONS.md).
+
 ## Resolved - route registration
 
 `UpdateRoute<TPayload>` binds `UpdateType`, payload type and payload extractor.

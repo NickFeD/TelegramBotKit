@@ -77,13 +77,20 @@ internal sealed class RouteRegistration<TPayload>(UpdateHandlerRegistry registry
     public Type? TerminalType => _terminal?.HandlerType;
     internal void EnsureMutable() => registry.EnsureMutable();
 
-    internal void Use(Func<BotContext, BotContextDelegate, Task> middleware)
+    internal void Use(
+        Func<UpdateRouteContext<TPayload>, UpdateRouteDelegate<TPayload>, Task> middleware)
     {
         registry.EnsureMutable();
         _nodes.Add(new DelegatePipelineNode<UpdateRouteContext<TPayload>>(
-            (routeContext, next) => middleware(
-                routeContext.BotContext,
-                nextContext => next(routeContext.WithBotContext(nextContext)))));
+            (routeContext, next) => middleware(routeContext, nextContext => next(nextContext))));
+    }
+
+    internal void UseUpdateMiddleware(Func<BotContext, BotContextDelegate, Task> middleware)
+    {
+        registry.EnsureMutable();
+        Use((routeContext, next) => middleware(
+            routeContext.BotContext,
+            nextContext => next(routeContext.WithBotContext(nextContext))));
     }
 
     internal void ValidateTerminal<THandler>() where THandler : class, IUpdatePayloadHandler<TPayload>

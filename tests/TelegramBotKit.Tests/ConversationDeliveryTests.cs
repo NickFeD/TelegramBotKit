@@ -211,12 +211,14 @@ public sealed class ConversationDeliveryTests
     {
         public Task HandleAsync(Message payload, BotContext ctx) { state.Events.Enqueue("terminal " + ctx.Update.Id); return Task.CompletedTask; }
     }
-    public sealed class LocalMiddleware(State state) : IUpdateMiddleware
+    public sealed class LocalMiddleware(State state) : IUpdateRouteMiddleware<Message>
     {
-        public async Task InvokeAsync(BotContext ctx, BotContextDelegate next)
+        public async Task InvokeAsync(UpdateRouteContext<Message> context,
+            UpdateRouteDelegate<Message> next)
         {
+            var ctx = context.BotContext;
             state.Events.Enqueue("local before " + ctx.Update.Id);
-            await next(ctx);
+            await next(context);
             state.Events.Enqueue("local after " + ctx.Update.Id);
         }
     }

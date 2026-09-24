@@ -182,12 +182,28 @@ processing extracts its typed payload once and executes through
 registry freezes.
 
 `IUpdateMiddleware` and `IUpdatePayloadHandler<TPayload>` remain public
-TelegramBotKit façades adapted to the internal node and terminal model. The kernel,
-its nodes and the typed route execution context remain internal API.
+TelegramBotKit façades adapted to the internal node and terminal model. The kernel
+and its nodes remain internal API. D-022 adds the public typed route context and
+middleware façade without exposing the kernel.
+
+## D-022 - Typed route middleware façade
+
+**Status: CURRENT**
+
+Each typed update route exposes route-local middleware through
+`IUpdateRouteMiddleware<TPayload>`, `UpdateRouteContext<TPayload>` and
+`UpdateRouteDelegate<TPayload>`. The route descriptor propagates `TPayload` through
+middleware and the single terminal handler, and the route context exposes the exact
+already extracted payload as read-only state.
+
+Global `IUpdateMiddleware` remains `BotContext`-based and is reserved for
+update-wide cross-cutting behavior. Existing update middleware can run inside a
+route through the explicitly named `UseUpdateMiddleware` compatibility adapter.
+Both public middleware contracts adapt to the same internal generic pipeline kernel.
 
 ## Registration and delivery implementation notes
 
-D-018 through D-021 remain in effect. A single service collection owns one shared builder/registry across all `AddTelegramBotKit` calls. Failed DI registration does not commit terminal/middleware changes.
+D-018 through D-022 remain in effect. A single service collection owns one shared builder/registry across all `AddTelegramBotKit` calls. Failed DI registration does not commit terminal/middleware changes.
 Core dispatcher checks conversation ownership from the registry after global middleware for both direct and polling delivery. Hosting only schedules execution. Active built-in conversation replies can bypass the occupied actor/DOP slot to unblock the waiting command; stale waiter candidates return to scheduled routing without rerunning middleware.
 
 ## REPLACED
