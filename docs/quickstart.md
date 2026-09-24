@@ -175,11 +175,29 @@ public sealed class StartCommand : IMessageCommand
 }
 ```
 
+Message and CallbackQuery use the built-in command routes unless you explicitly configure those routes.
+To handle another Telegram update type, register one typed terminal:
+
+```csharp
+using Telegram.Bot.Types;
+using TelegramBotKit.Dispatching;
+
+bot.Route(UpdateRoutes.EditedMessage).HandleWith<EditedMessageHandler>();
+
+public sealed class EditedMessageHandler : IUpdatePayloadHandler<Message>
+{
+    public Task HandleAsync(Message message, BotContext ctx)
+        => Task.CompletedTask;
+}
+```
+
+`UpdateRoutes.Message` and `UpdateRoutes.EditedMessage` both carry `Message`, but each route owns its own terminal and middleware. Explicitly configuring Message or CallbackQuery replaces that route's built-in command terminal.
+
 ## Next
 
 - Commands and routing: `./commands-and-routing.md`
 - Middleware: `./middleware.md`
 - Hosting: `./hosting.md`
-- Updates and payload handlers: `./updates.md`
+- Update routes and typed handlers: `./updates.md`
 - Conversations (WaitForUserResponse): `./conversations.md`
 - Keyboards: `./keyboards.md`

@@ -11,6 +11,11 @@ public sealed class WaitForUserResponse
 {
     private readonly ConcurrentDictionary<WaitKey, Channel<Message>> _waiters = new();
 
+    // Scheduling hint only. The dispatcher must recheck delivery after middleware:
+    // the waiter can time out or be consumed before then.
+    internal bool IsWaitingFor(Message message) =>
+        _waiters.ContainsKey(new WaitKey(message.Chat.Id, message.From?.Id ?? 0));
+
     /// <summary>
     /// Executes the wait asynchronously.
     /// </summary>

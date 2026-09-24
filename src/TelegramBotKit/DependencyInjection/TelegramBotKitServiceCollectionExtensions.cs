@@ -73,6 +73,16 @@ public static partial class TelegramBotKitServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configure);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
 
+        var registration = services.FirstOrDefault(static descriptor =>
+            descriptor.ServiceType == typeof(TelegramBotKitRegistration))?.ImplementationInstance
+            as TelegramBotKitRegistration;
+        if (registration is not null)
+        {
+            registration.Builder.Registry.EnsureMutable();
+            services.Configure(configure);
+            return registration.Builder;
+        }
+
         services.AddOptions<TelegramBotKitOptions>()
             .Configure(configure)
             .ValidateOnStart();
@@ -98,49 +108,38 @@ public static partial class TelegramBotKitServiceCollectionExtensions
         services.AddScoped<CommandRouter>();
         services.TryAddSingleton<CommandRegistry>();
 
-        services.AddScoped<IUpdatePayloadHandler<Message>, MessageUpdateHandler>();
-        services.AddScoped<IUpdatePayloadHandler<CallbackQuery>, CallbackQueryUpdateHandler>();
 
         services.TryAddSingleton<IDefaultUpdateHandler, NoopDefaultUpdateHandler>();
         services.TryAddSingleton<IDefaultMessageHandler, NoopDefaultMessageHandler>();
         services.TryAddSingleton<IDefaultCallbackHandler, NoopDefaultCallbackHandler>();
 
+        services.TryAddScoped<MessageUpdateHandler>();
+        services.TryAddScoped<CallbackQueryUpdateHandler>();
         var builder = new TelegramBotKitBuilder(services);
 
-        services.AddSingleton(sp => new MiddlewarePipeline(sp, builder.MiddlewareFactories));
+        services.AddSingleton(sp => new MiddlewarePipeline(builder.MiddlewareFactories));
 
         services.AddSingleton(sp =>
         {
-            var reg = new UpdateHandlerRegistry();
-
-            MapDefaultUpdatePayloads(reg);
-
-            foreach (var add in builder.RegistryActions)
-                add(reg);
+            var reg = builder.Registry;
+            // Defaults only fill routes that the application has not explicitly configured.
+            if (!reg.Contains(UpdateType.Message))
+                reg.GetOrAdd(UpdateRoutes.Message).SetTerminal<MessageUpdateHandler>();
+            if (!reg.Contains(UpdateType.CallbackQuery))
+                reg.GetOrAdd(UpdateRoutes.CallbackQuery).SetTerminal<CallbackQueryUpdateHandler>();
 
             reg.Freeze();
             return reg;
         });
 
         services.AddSingleton<IUpdateDispatcher, UpdateRouter>();
+        services.AddSingleton(new TelegramBotKitRegistration(builder));
 
         return builder;
     }
 
-    /// <summary>
-    /// Adds the update handler.
-    /// </summary>
-    public static IServiceCollection AddUpdateHandler<TPayload, THandler>(
-        this IServiceCollection services,
-        ServiceLifetime lifetime = ServiceLifetime.Scoped)
-        where TPayload : class
-        where THandler : class, IUpdatePayloadHandler<TPayload>
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        services.Add(new ServiceDescriptor(typeof(IUpdatePayloadHandler<TPayload>), typeof(THandler), lifetime));
-        return services;
-    }
+    // Stored on the service collection, not in a process-wide cache or a second registry.
+    private sealed record TelegramBotKitRegistration(TelegramBotKitBuilder Builder);
 
     /// <summary>
     /// Adds the telegram bot kit queued message sender.
@@ -161,14 +160,6 @@ public static partial class TelegramBotKitServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<IMessageSender>(sp => sp.GetRequiredService<QueuedMessageSender>()));
 
         return services;
-    }
-
-    private static void MapDefaultUpdatePayloads(UpdateHandlerRegistry reg)
-    {
-        // Minimal defaults that cover the built-in handlers registered by AddTelegramBotKit.
-        // Additional payloads can be mapped via TelegramBotKitBuilder.Map(...).
-        reg.Map<Message>(UpdateType.Message, static u => u.Message);
-        reg.Map<CallbackQuery>(UpdateType.CallbackQuery, static u => u.CallbackQuery);
     }
 
     /// <summary>

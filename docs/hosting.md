@@ -36,7 +36,7 @@ Additional notes:
 
 `WaitForUserResponse` is a small helper for “ask a question → wait for the next message from this user”.
 
-- TelegramBotKit will try to publish incoming `Message` payloads to any active waiter **before** running command routing.
+- For the built-in Message route, core tries to publish incoming messages to an active waiter after global middleware and before command routing. Explicit Message routes retain full ownership and do not automatically publish to waiters.
 - Only **one active wait** is allowed per `(chatId, userId)`. If you call `WaitAsync` again while a previous wait is still active, it throws:
   `InvalidOperationException: Already waiting for message from chat:... user:...`
 
@@ -48,3 +48,10 @@ Polling uses a global DOP limiter (`MaxDegreeOfParallelism`).
 
 - Set it to a lower value for stricter global concurrency.
 - Set it to `0` to **remove the global limit** (unlimited concurrency; actors still serialize per key).
+
+## Conversation response scheduling
+
+Polling forwards every update to the scheduler. Routing/conversation policy stays in the core dispatcher.
+For the built-in Message route, a potential response to an already active waiter runs through global middleware in a separate update scope outside the actor and global DOP slot held by the waiting command. Middleware can still short-circuit delivery.
+If the waiter disappears while middleware is running, the remaining routing continuation returns to the scheduler without rerunning middleware. The response scope is disposed only after its pipeline unwinds.
+This exception to the concurrency limit is limited to response processing; normal commands and explicit routes keep actor/DOP scheduling.

@@ -13,7 +13,7 @@ It lets you implement simple “ask a question → wait for the next message” 
 - If the waiter receives a message, `WaitAsync` returns that `Message`.
 - If the wait times out or is cancelled, `WaitAsync` returns `null`.
 
-Important: TelegramBotKit attempts to publish to an active waiter **before** running command routing.
+For the built-in Message route, the core dispatcher attempts to publish to an active waiter **after global middleware and before command routing**. Explicit Message routes opt out of this automatic publication (D-020).
 So the “next message” will usually be consumed by the waiter, not by your message commands.
 
 ## Constraints / gotchas
@@ -108,3 +108,5 @@ When you use `TelegramBotKit.Hosting` polling, updates are processed using “ac
 Callback queries are keyed by **user**, which helps keep request/response flows predictable for a single user.
 
 That said, the “one active wait” rule still applies: even with perfect serialization, starting a second wait before finishing the first will throw.
+
+Core applies the same ownership policy to direct dispatch and polling. Responses to an active built-in waiter can pass middleware outside the occupied actor/DOP slot so an awaiting command can resume even with `MaxDegreeOfParallelism = 1`. Global middleware must not hold a per-chat lock across an awaiting command if that same lock is required to process its response.

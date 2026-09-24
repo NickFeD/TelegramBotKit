@@ -4,7 +4,6 @@ using Microsoft.Extensions.Options;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
-using TelegramBotKit.Conversations;
 using TelegramBotKit.Options;
 
 namespace TelegramBotKit.Hosting;
@@ -13,20 +12,17 @@ internal sealed class PollingHostedService : BackgroundService
 {
     private readonly ITelegramBotClient _bot;
     private readonly UpdateActorScheduler _scheduler;
-    private readonly WaitForUserResponse _wait;
     private readonly IOptions<TelegramBotKitOptions> _options;
     private readonly ILogger<PollingHostedService> _log;
 
     public PollingHostedService(
         ITelegramBotClient bot,
         UpdateActorScheduler scheduler,
-        WaitForUserResponse wait,
         IOptions<TelegramBotKitOptions> options,
         ILogger<PollingHostedService> log)
     {
         _bot = bot;
         _scheduler = scheduler;
-        _wait = wait;
         _options = options;
         _log = log;
     }
@@ -76,9 +72,6 @@ internal sealed class PollingHostedService : BackgroundService
             foreach (var upd in updates)
             {
                 offset = upd.Id + 1;
-
-                if (upd.Message is not null && _wait.TryPublish(upd.Message))
-                    continue;
 
                 await _scheduler.EnqueueAsync(upd, stoppingToken).ConfigureAwait(false);
             }

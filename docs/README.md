@@ -10,14 +10,14 @@ If you are new to TelegramBotKit, start with:
 ## Start here
 
 1. [Quick Start — minimal polling bot](quickstart.md)
-2. [Processing pipeline — middleware → routing → handlers → fallbacks](processing-pipeline.md)
+2. [Processing pipeline — middleware → update routes → terminal/fallback](processing-pipeline.md)
 
 ## Core topics
 
 - [Commands and routing](commands-and-routing.md) — commands, routing sugar, default handlers
 - [Middleware](middleware.md) — middleware pipeline and examples
 - [Hosting](hosting.md) — polling and update scheduling
-- [Updates](updates.md) — mapping new update types and registering payload handlers
+- [Update routes](updates.md) — built-in/custom descriptors, local middleware and terminals
 - [Conversations](conversations.md) — `WaitForUserResponse` patterns and gotchas
 - [Keyboards](keyboards.md) — inline and reply keyboard helpers
 

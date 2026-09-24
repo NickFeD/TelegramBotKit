@@ -20,8 +20,6 @@ internal sealed class UpdateActorScheduler : IDisposable
     private readonly ConcurrentDictionary<ActorKey, Actor> _actors = new();
     private readonly Timer _cleanup;
 
-    public IUpdateDispatcher Dispatcher => _dispatcher;
-    public ILogger<UpdateActorScheduler> Log => _log;
 
     public UpdateActorScheduler(
         IUpdateDispatcher dispatcher,
@@ -41,23 +39,35 @@ internal sealed class UpdateActorScheduler : IDisposable
     {
         if (update is null) throw new ArgumentNullException(nameof(update));
 
+        _ = ProcessAsync(update, ct);
+        return ValueTask.CompletedTask;
+    }
+
+    private async Task ScheduleAsync(Update update, Func<Task> work, CancellationToken ct)
+    {
         var key = TryGetActorKey(update);
 
         if (key is null)
         {
-            _ = ProcessUnkeyedAsync(update, ct);
-            return ValueTask.CompletedTask;
+            await RunWithGlobalLimitAsync(work, ct).ConfigureAwait(false);
+            return;
         }
 
-        var actor = _actors.GetOrAdd(key.Value, k => new Actor(k, this));
-        return actor.EnqueueAsync(update, ct);
+        var actor = _actors.GetOrAdd(key.Value, _ => new Actor(this));
+        var item = new UpdateWorkItem(ct, work);
+        await actor.EnqueueAsync(item).ConfigureAwait(false);
+        await item.Completion.Task.ConfigureAwait(false);
     }
 
-    private async Task ProcessUnkeyedAsync(Update update, CancellationToken ct)
+    private async Task ProcessAsync(Update update, CancellationToken ct)
     {
         try
         {
-            await RunWithGlobalLimitAsync(() => _dispatcher.DispatchAsync(update, ct), ct).ConfigureAwait(false);
+            if (_dispatcher is IScheduledUpdateDispatcher scheduled)
+                await scheduled.DispatchScheduledAsync(update, ct,
+                    (work, token) => ScheduleAsync(update, work, token)).ConfigureAwait(false);
+            else
+                await ScheduleAsync(update, () => _dispatcher.DispatchAsync(update, ct), ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

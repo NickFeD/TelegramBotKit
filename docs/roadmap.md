@@ -14,7 +14,7 @@ This roadmap is intentionally short. It is not a promise—just a direction.
 
 - Keep improving documentation and samples
 - API consistency and naming polish
-- More guidance on update routing and handler mappings
+- More guidance on typed update routes and local pipelines
 - Performance tuning in hot paths (router, registry, middleware pipeline, sender)
 
 ## Medium term

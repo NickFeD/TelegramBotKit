@@ -58,8 +58,10 @@ bot.UseMiddleware<TraceMiddleware>();
 
 ### Lifetimes
 
-- Middleware is typically singleton.
-- If you need per-update scoped services, resolve them via `ctx.Services`.
+- Class middleware defaults to scoped; existing concrete DI registrations are respected.
+- Global and route middleware resolve from the per-update scope, supporting scoped constructor dependencies.
+- Explicit singletons must not capture scoped dependencies.
+- `bot.Route(descriptor).Use<TMiddleware>()` adds middleware to one route; see [update routes](updates.md) for default-route ownership and migration.
 
 ## Ordering
 

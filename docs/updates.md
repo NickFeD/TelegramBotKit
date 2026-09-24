@@ -1,219 +1,116 @@
-# Updates and Payload Handlers
+# Update routes
 
-← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
+[Docs index](README.md) | [Processing pipeline](processing-pipeline.md)
 
-TelegramBotKit routes incoming `Update` objects in two steps:
+Routes are identified by Telegram `UpdateType`, never by the CLR payload alone.
+`UpdateRoute<TPayload>` binds the update type, payload type and extraction function permanently.
 
-1) **Select a route by `UpdateType`** (e.g. `Message`, `CallbackQuery`, `InlineQuery`)
-2) **Extract a payload** from the `Update` and dispatch it to all registered handlers of that payload type:
-   `IUpdatePayloadHandler<TPayload>`
-
-This design is simple and fast, but it has an important implication:
-
-> Handlers are selected by **payload type** (`TPayload`), not by `UpdateType`.
-
-That matters for Telegram update types that share the same payload type (for example, both `Message` and `EditedMessage` payloads are of type `Message`).
-
----
-
-## Adding handlers for other update types
-
-To handle a new update type, you usually need to do two things:
-
-1) Register a handler in DI: `IUpdatePayloadHandler<TPayload>`
-2) Add a mapping from `UpdateType` to a payload extractor: `Update -> TPayload?`
-
-### Example: InlineQuery (unique payload type)
-
-`UpdateType.InlineQuery` maps to `Update.InlineQuery` which is `InlineQuery`.
+## Register a terminal
 
 ```csharp
 using Telegram.Bot.Types;
+using TelegramBotKit;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Dispatching;
 
-public sealed class InlineQueryHandler : IUpdatePayloadHandler<InlineQuery>
+var bot = services.AddTelegramBotKit(options => options.Token = token);
+bot.Route(UpdateRoutes.Message).HandleWith<MessageHandler>();
+bot.Route(UpdateRoutes.EditedMessage).HandleWith<EditedMessageHandler>();
+
+public sealed class MessageHandler : IUpdatePayloadHandler<Message>
 {
-    public Task HandleAsync(InlineQuery payload, BotContext ctx)
-    {
-        // handle inline query
-        return Task.CompletedTask;
-    }
+    public Task HandleAsync(Message payload, BotContext ctx) => Task.CompletedTask;
 }
-
-// registration
-var kit = builder.Services.AddTelegramBotKit(opt => opt.Token = "...");
-
-kit.Services.AddUpdateHandler<InlineQuery, InlineQueryHandler>();
-kit.Map<InlineQuery>(UpdateType.InlineQuery, static u => u.InlineQuery);
-```
-
-This is the ideal case: **one UpdateType → one payload type**.
-
----
-
-## When multiple UpdateTypes share the same payload type
-
-Telegram has update types that share the same payload CLR type. The most common example:
-
-* `UpdateType.Message` → `Update.Message` → `Message`
-* `UpdateType.EditedMessage` → `Update.EditedMessage` → `Message`
-
-If you register `IUpdatePayloadHandler<Message>`, it will run for **every route that dispatches `Message`**.
-
-Important:
-
-- Adding a mapping for `UpdateType.EditedMessage` **does not overwrite** the existing `UpdateType.Message` mapping.
-- Adding another `IUpdatePayloadHandler<Message>` **does not replace** other `Message` handlers — it **adds** a new one.
-
-That means this registration:
-
-```csharp
-kit.Services.AddUpdateHandler<Message, EditedMessageHandler>();
-kit.Map<Message>(UpdateType.EditedMessage, static u => u.EditedMessage);
-```
-
-does **not** isolate the handler to edited messages only.
-It registers another `IUpdatePayloadHandler<Message>`, so it may also run for normal `Message` updates (and other routes that dispatch `Message`).
-
-You have two recommended ways to handle this.
-
----
-
-## Option A: Filter by UpdateType inside the handler (simple)
-
-Use `TPayload = Message`, but guard by the current update type:
-
-```csharp
-using Telegram.Bot.Types;
-using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Dispatching;
 
 public sealed class EditedMessageHandler : IUpdatePayloadHandler<Message>
 {
-    public Task HandleAsync(Message payload, BotContext ctx)
-    {
-        if (ctx.Update.Type != UpdateType.EditedMessage)
-            return Task.CompletedTask;
-
-        // handle edited message here
-        return Task.CompletedTask;
-    }
-}
-
-var kit = builder.Services.AddTelegramBotKit(opt => opt.Token = "...");
-
-kit.Services.AddUpdateHandler<Message, EditedMessageHandler>();
-kit.Map<Message>(UpdateType.EditedMessage, static u => u.EditedMessage);
-```
-
-Pros:
-
-* Minimal code, no extra types
-
-Cons:
-
-* Handler is still invoked for other `Message` routes, but exits quickly
-
----
-
-## Option B: Use a wrapper payload type (clean isolation)
-
-Create a dedicated payload type so your handler is selected by **a unique CLR type**:
-
-```csharp
-using Telegram.Bot.Types;
-using TelegramBotKit.DependencyInjection;
-
-public sealed class EditedMessagePayload
-{
-    public EditedMessagePayload(Message message) => Message = message;
-    public Message Message { get; }
+    public Task HandleAsync(Message payload, BotContext ctx) => Task.CompletedTask;
 }
 ```
 
-Handler:
+These routes share the `Message` payload type but have independent middleware and terminals.
+`HandleWith<CallbackQueryHandler>()` on the Message route fails to compile when that handler implements only `IUpdatePayloadHandler<CallbackQuery>`.
+Each route has at most one terminal. A second `HandleWith` call throws `TelegramBotKitRegistrationException` identifying the update type and existing/attempted handlers, even if both registrations use the same handler class.
+DI registers/resolves the concrete handler type. Registering `IUpdatePayloadHandler<Message>` directly does not assign it to any route.
+
+## Local middleware
 
 ```csharp
-using TelegramBotKit.Dispatching;
-
-public sealed class EditedMessageHandler : IUpdatePayloadHandler<EditedMessagePayload>
-{
-    public Task HandleAsync(EditedMessagePayload payload, BotContext ctx)
-    {
-        // payload.Message is the edited message
-        return Task.CompletedTask;
-    }
-}
+bot.Route(UpdateRoutes.EditedMessage)
+   .Use<AuditMiddleware>() // implements IUpdateMiddleware
+   .Use(async (ctx, next) =>
+   {
+       // before
+       await next(ctx);
+       // after
+   })
+   .HandleWith<EditedMessageHandler>();
 ```
 
-Registration + mapping:
+Middleware uses the existing `IUpdateMiddleware` / `BotContextDelegate` contract.
+First registered is outermost; `await next(ctx)` awaits downstream and then unwinds. Omitting `next` short-circuits. Exceptions propagate through local and global middleware.
+Payload extraction occurs once before the local pipeline. Middleware receives `BotContext`; the terminal receives the typed payload.
+Repeated `Route` calls with the **same descriptor instance** add to the same pipeline. Reuse custom descriptor instances as well.
+A different descriptor for an already configured `UpdateType` is rejected to prevent silently changing its payload or extraction.
+
+`Use<TMiddleware>(lifetime)` and `HandleWith<THandler>(lifetime)` default to scoped and respect pre-existing concrete DI registrations.
+Global `UseMiddleware<T>()` also defaults to scoped; middleware resolves from the per-update scope, including constructor-injected scoped dependencies.
+Complete configuration before resolving the dispatcher. Routes are frozen when the runtime registry is resolved.
+Repeated `AddTelegramBotKit` calls on the same `IServiceCollection` share one builder/registry and global middleware list; option delegates accumulate. The first installed bot-client factory (or an existing client registration) remains in use.
+Configure services on one thread. A rejected terminal/middleware registration does not modify route state; existing DI registrations and lifetimes remain respected.
+
+
+## Built-in descriptors and defaults
+
+`UpdateRoutes` provides all 23 typed payload routes in Telegram.Bot 22.9.0, including messages/edits/channel/business messages, callbacks, inline queries, payments, polls, membership, reactions and boosts.
+The catalog describes routes; it does not automatically enable terminals for all of them.
+
+When the application has not explicitly configured those routes, Message and CallbackQuery receive built-in terminals:
+
+- Message: expected conversation response, then slash/text commands, then `IDefaultMessageHandler`.
+- CallbackQuery: callback commands, then `IDefaultCallbackHandler`.
+
+**Calling `Route(UpdateRoutes.Message)` or `Route(UpdateRoutes.CallbackQuery)` explicitly defines the entire route.** It opts out of that route's built-in command/conversation terminal, even when only adding middleware.
+To keep default command behavior and add surrounding policies, use global middleware (with an update-type guard if needed).
+Commands themselves remain a separate routing layer; command registration APIs are unchanged.
+This ownership policy is enforced by core for both direct dispatch and polling. Hosting does not publish messages to conversation waiters independently.
+
+An explicit route may have no terminal. Its local middleware runs and then invokes `IDefaultUpdateHandler` unless short-circuited.
+Unregistered update types also invoke that fallback. An unexpectedly null extracted payload invokes update fallback directly, skipping the local pipeline but remaining inside global middleware.
+All fallbacks are no-ops by default and update fallback is resolved from the per-update scope.
+
+## Custom and future routes
+
+A working custom descriptor using the current Telegram.Bot API:
 
 ```csharp
-var kit = builder.Services.AddTelegramBotKit(opt => opt.Token = "...");
-
-kit.Services.AddUpdateHandler<EditedMessagePayload, EditedMessageHandler>();
-
-kit.Map<EditedMessagePayload>(
+var edited = UpdateRoute.Create(
     UpdateType.EditedMessage,
-    static u => u.EditedMessage is null ? null : new EditedMessagePayload(u.EditedMessage));
+    static update => update.EditedMessage);
+// inferred: UpdateRoute<Message>
+bot.Route(edited).HandleWith<EditedMessageHandler>();
 ```
 
-Pros:
-
-* Clean separation: only your wrapper payload route triggers this handler
-* No accidental mixing with normal `Message` handlers
-
-Cons:
-
-* One small allocation per edited message (the wrapper object)
-
----
-
-## Multiple handlers for the same payload
-
-You can register multiple handlers for the same `TPayload`:
+Once an upgraded Telegram.Bot exposes a new update type and property, use the same pattern without a TelegramBotKit release (illustrative future names):
 
 ```csharp
-kit.Services.AddUpdateHandler<Message, FirstMessageHandler>();
-kit.Services.AddUpdateHandler<Message, SecondMessageHandler>();
+var newFeature = UpdateRoute.Create(
+    UpdateType.NewFeature,
+    static update => update.NewFeature);
+bot.Route(newFeature).HandleWith<NewFeatureHandler>();
 ```
 
-TelegramBotKit will invoke them sequentially in DI registration order.
+There is no enum allowlist, reflection-based property guessing or string property name lookup in dispatch.
 
----
+## Breaking migration
 
-## AllowedUpdates and polling
+Previous versions configured the payload extractor and payload handler as two independent registrations. That payload-only dispatch model and its multiple-terminal behavior have no compatibility shim.
+Replace the old two-step registration with one route registration:
 
-If you are using polling (`AddTelegramBotKitPolling`) and set `Polling.AllowedUpdates` to a **non-empty** list, Telegram will only deliver those update types.
+```csharp
+kit.Route(UpdateRoutes.InlineQuery).HandleWith<InlineQueryHandler>();
+```
 
-So if you add a new mapping/handler for (say) `UpdateType.InlineQuery`, make sure `InlineQuery` is included in `AllowedUpdates`.
-
-If you keep `AllowedUpdates: []`, Telegram delivers **all** update types (default).
-
----
-
-## One route per UpdateType
-
-TelegramBotKit stores a single route per `UpdateType`. If you call `kit.Map<T>(sameType, ...)` multiple times, the **last mapping wins**.
-
-If you need to fan-out from one `UpdateType` to multiple handlers, keep a single mapping and register multiple `IUpdatePayloadHandler<T>` implementations for that payload type.
-
----
-
-## Troubleshooting
-
-### “My handler is never called”
-
-Make sure you did both steps:
-
-* registered `IUpdatePayloadHandler<TPayload>` in DI
-* added `kit.Map<TPayload>(UpdateType.X, extractor)`
-
-Without a mapping, TelegramBotKit cannot extract the payload from `Update`, so it will not invoke your handler.
-
-### “My handler runs for updates I did not expect”
-
-This typically happens when multiple `UpdateType` routes dispatch the same payload CLR type (like `Message`).
-
-Use Option A (filter by `UpdateType`) or Option B (wrapper payload type) to get the behavior you want.
+Replace extra handlers with local middleware and keep one terminal owner. Remove wrapper payloads or update-type guards used solely to distinguish Message from EditedMessage.
+Applications that relied on an extra Message handler running after built-in commands must deliberately choose a custom terminal or move the additional behavior to middleware around the default flow.
+The null-payload case now calls update fallback instead of silently returning.

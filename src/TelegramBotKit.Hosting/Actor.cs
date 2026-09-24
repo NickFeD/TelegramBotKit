@@ -1,21 +1,17 @@
 using System.Threading.Channels;
-using Microsoft.Extensions.Logging;
-using Telegram.Bot.Types;
 
 namespace TelegramBotKit.Hosting;
 
 internal sealed class Actor
 {
-    private readonly ActorKey _key;
     private readonly UpdateActorScheduler _owner;
     private readonly Channel<UpdateWorkItem> _queue;
 
     private int _pending;
     private long _lastActivityTicks;
 
-    public Actor(ActorKey key, UpdateActorScheduler owner)
+    public Actor(UpdateActorScheduler owner)
     {
-        _key = key;
         _owner = owner;
         _queue = Channel.CreateUnbounded<UpdateWorkItem>(new UnboundedChannelOptions
         {
@@ -42,18 +38,18 @@ internal sealed class Actor
         }
     }
 
-    public ValueTask EnqueueAsync(Update upd, CancellationToken ct)
+    public ValueTask EnqueueAsync(UpdateWorkItem item)
     {
         Interlocked.Increment(ref _pending);
         Touch();
 
-        return WriteAsync(new UpdateWorkItem(upd, ct));
+        return WriteAsync(item);
 
         async ValueTask WriteAsync(UpdateWorkItem item)
         {
             try
             {
-                await _queue.Writer.WriteAsync(item, ct).ConfigureAwait(false);
+                await _queue.Writer.WriteAsync(item, item.Ct).ConfigureAwait(false);
             }
             catch
             {
@@ -74,20 +70,18 @@ internal sealed class Actor
             {
                 Touch();
                 await _owner.RunWithGlobalLimitAsync(
-                    () => _owner.Dispatcher.DispatchAsync(item.Update, item.Ct),
+                    item.Execute,
                     item.Ct).ConfigureAwait(false);
+                item.Completion.TrySetResult();
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
+                item.Completion.TrySetCanceled(ex.CancellationToken);
             }
             catch (Exception ex)
             {
-                _owner.Log.LogError(
-                    ex,
-                    "Actor update processing failed (kind={Kind}, id={Id}), updateId={UpdateId}",
-                    _key.Kind,
-                    _key.Id,
-                    item.Update.Id);
+                // The scheduler observes completion and logs once for either lane.
+                item.Completion.TrySetException(ex);
             }
             finally
             {

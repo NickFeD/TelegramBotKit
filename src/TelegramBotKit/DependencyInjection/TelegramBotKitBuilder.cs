@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using TelegramBotKit.Dispatching;
 using TelegramBotKit.Messaging;
 using TelegramBotKit.Middleware;
@@ -13,10 +12,9 @@ namespace TelegramBotKit.DependencyInjection;
 public sealed class TelegramBotKitBuilder
 {
     private readonly List<Func<IServiceProvider, IUpdateMiddleware>> _middlewareFactories = new();
-    private readonly List<Action<UpdateHandlerRegistry>> _registryActions = new();
+    internal UpdateHandlerRegistry Registry { get; } = new();
 
     internal IReadOnlyList<Func<IServiceProvider, IUpdateMiddleware>> MiddlewareFactories => _middlewareFactories;
-    internal IReadOnlyList<Action<UpdateHandlerRegistry>> RegistryActions => _registryActions;
     internal TelegramBotKitBuilder(IServiceCollection services) => Services = services;
 
     /// <summary>
@@ -31,10 +29,9 @@ public sealed class TelegramBotKitBuilder
     public TelegramBotKitBuilder UseMiddleware<TMiddleware>()
         where TMiddleware : class, IUpdateMiddleware
     {
-        // Prefer DI resolution if the middleware is registered (e.g. as a singleton),
-        // otherwise fall back to ActivatorUtilities for convenience.
-        _middlewareFactories.Add(sp =>
-            sp.GetService<TMiddleware>() ?? ActivatorUtilities.CreateInstance<TMiddleware>(sp));
+        Registry.EnsureMutable();
+        Services.TryAddScoped<TMiddleware>();
+        _middlewareFactories.Add(sp => sp.GetRequiredService<TMiddleware>());
         return this;
     }
 
@@ -45,6 +42,7 @@ public sealed class TelegramBotKitBuilder
     {
         if (middleware is null) throw new ArgumentNullException(nameof(middleware));
 
+        Registry.EnsureMutable();
         _middlewareFactories.Add(_ => new InlineUpdateMiddleware(middleware));
         return this;
     }
@@ -57,21 +55,10 @@ public sealed class TelegramBotKitBuilder
     {
         if (middleware is null) throw new ArgumentNullException(nameof(middleware));
 
+        Registry.EnsureMutable();
         _middlewareFactories.Add(_ => new InlineUpdateMiddlewareValueTask(middleware));
         return this;
     }
-    /// <summary>
-    /// Adds the update handler.
-    /// </summary>
-    public TelegramBotKitBuilder AddUpdateHandler<TPayload, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
-        where TPayload : class
-        where THandler : class, IUpdatePayloadHandler<TPayload>
-    {
-        Services.AddUpdateHandler<TPayload, THandler>(lifetime);
-        return this;
-    }
-
-
     /// <summary>
     /// Adds the queued message sender.
     /// </summary>
@@ -81,15 +68,15 @@ public sealed class TelegramBotKitBuilder
         return this;
     }
 
-    /// <summary>
-    /// Maps an update to a payload.
-    /// </summary>
-    public TelegramBotKitBuilder Map<TPayload>(UpdateType type, Func<Update, TPayload?> extractor)
+    /// <summary>Configures a route identified by its Telegram update type.</summary>
+    /// <remarks>
+    /// Explicit configuration owns the entire route, opting out of any built-in terminal.
+    /// Reuse the same descriptor to add middleware; only one terminal may be registered.
+    /// </remarks>
+    public UpdateRouteBuilder<TPayload> Route<TPayload>(UpdateRoute<TPayload> route)
         where TPayload : class
     {
-        if (extractor is null) throw new ArgumentNullException(nameof(extractor));
-
-        _registryActions.Add(reg => reg.Map(type, extractor));
-        return this;
+        ArgumentNullException.ThrowIfNull(route);
+        return new(Services, Registry.GetOrAdd(route));
     }
 }

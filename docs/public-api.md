@@ -10,12 +10,15 @@ Everything else in the repository should be treated as implementation detail and
   - AddTelegramBotKit(Action<TelegramBotKitOptions>)
   - AddTelegramBotKit(Action<TelegramBotKitOptions>, HttpClient)
   - AddTelegramBotKit(Action<TelegramBotKitOptions>, Func<IServiceProvider, HttpClient?>)
-  - AddUpdateHandler<TPayload, THandler>(...)
   - AddCommands(...)
   - AddMessageCommand<TCommand>(...)
   - AddTextCommand<TCommand>(...)
   - AddCallbackCommand<TCommand>(...)
 - TelegramBotKit.DependencyInjection.TelegramBotKitBuilder
+  - Route<TPayload>(UpdateRoute<TPayload>)
+- TelegramBotKit.DependencyInjection.UpdateRouteBuilder<TPayload>
+  - Use<TMiddleware>(...) / Use(Func<BotContext, BotContextDelegate, Task>)
+  - HandleWith<THandler>(...)
 
 ### Pipeline
 - TelegramBotKit.BotContext
@@ -36,6 +39,9 @@ Everything else in the repository should be treated as implementation detail and
 - TelegramBotKit.Commands.CallbackCommandAttribute
 
 ### Dispatching
+- TelegramBotKit.Dispatching.UpdateRoute<TPayload>
+- TelegramBotKit.Dispatching.UpdateRoute.Create<TPayload>(...)
+- TelegramBotKit.Dispatching.UpdateRoutes
 - TelegramBotKit.Dispatching.IUpdateDispatcher
 - TelegramBotKit.Dispatching.IUpdatePayloadHandler<TPayload>
 

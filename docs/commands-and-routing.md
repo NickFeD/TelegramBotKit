@@ -142,7 +142,10 @@ using Microsoft.Extensions.DependencyInjection;
 using TelegramBotKit.DependencyInjection;
 
 builder.Services.AddMessageCommand<StartCommand>("/start", ServiceLifetime.Transient);
-builder.Services.AddTextCommand<EchoCommand>(ignoreCase: true, ServiceLifetime.Transient, "hi", "hello");
+builder.Services.AddTextCommand<EchoCommand>(
+    new[] { "hi", "hello" },
+    ignoreCase: true,
+    lifetime: ServiceLifetime.Transient);
 builder.Services.AddCallbackCommand<LikeCommand>("like", ServiceLifetime.Transient);
 ```
 
@@ -154,11 +157,11 @@ If no command matches, TelegramBotKit calls default handlers:
 
 - `IDefaultMessageHandler` for unmatched text messages
 - `IDefaultCallbackHandler` for unmatched callback queries
-- `IDefaultUpdateHandler` for update types that have no route mapping at all
+- `IDefaultUpdateHandler` for unregistered update types, routes without a terminal, or a null extracted payload
 
 Notes:
 
-- `IDefaultUpdateHandler` is also used when an `UpdateType` **is mapped**, but there are **zero** `IUpdatePayloadHandler<TPayload>` registered for the mapped payload type.
+- An explicit route with no terminal runs its local middleware and then `IDefaultUpdateHandler`, unless middleware short-circuits.
 - Default handlers run **inside** the middleware pipeline (middleware wraps routing and fallbacks).
 
 By default they are **no-ops**.

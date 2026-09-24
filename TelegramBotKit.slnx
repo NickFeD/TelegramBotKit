@@ -11,4 +11,7 @@
   <Folder Name="/Элементы решения/">
     <File Path="Directory.Build.props" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TelegramBotKit.Tests/TelegramBotKit.Tests.csproj" />
+  </Folder>
 </Solution>

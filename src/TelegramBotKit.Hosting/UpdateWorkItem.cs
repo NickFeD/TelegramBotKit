@@ -1,5 +1,6 @@
-using Telegram.Bot.Types;
-
 namespace TelegramBotKit.Hosting;
 
-internal readonly record struct UpdateWorkItem(Update Update, CancellationToken Ct);
+internal sealed record UpdateWorkItem(CancellationToken Ct, Func<Task> Execute)
+{
+    internal TaskCompletionSource Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+}

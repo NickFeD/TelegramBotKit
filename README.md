@@ -14,7 +14,7 @@ TelegramBotKit is a lightweight toolkit for building Telegram bots on .NET with 
 ## Features
 
 - Middleware pipeline for update processing.
-- Typed update payload handlers (`IUpdatePayloadHandler<TPayload>`).
+- Typed `UpdateType` routes with one terminal handler and route-local middleware.
 - Message/text/callback commands (attributes + optional routing sugar).
 - `WaitForUserResponse` helper for request/response flows.
 - `IMessageSender` facade for sending messages.
@@ -120,7 +120,7 @@ public sealed class StartCommand : IMessageCommand
 * **[Documentation index](docs/README.md)** (recommended starting point)
 * [Quickstart](docs/quickstart.md)
 * [Commands and routing](docs/commands-and-routing.md)
-* [Updates and payload handlers (custom Update types)](docs/updates.md)
+* [Update routes and typed handlers](docs/updates.md)
 * [Middleware](docs/middleware.md)
 * [Hosting / Polling](docs/hosting.md)
 * [Conversations (`WaitForUserResponse`)](docs/conversations.md)
@@ -129,6 +129,8 @@ public sealed class StartCommand : IMessageCommand
 * [Releasing](docs/releasing.md)
 
 ## Running the sample
+
+The console polling sample keeps the built-in Message/CallbackQuery command routes and adds an independent terminal for edited messages with `Route(UpdateRoutes.EditedMessage).HandleWith<EditedMessageHandler>()`.
 
 ```bash
 dotnet run --project samples/TelegramBotKit.Sample.ConsolePolling

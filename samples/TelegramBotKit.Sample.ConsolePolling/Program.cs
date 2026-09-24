@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TelegramBotKit.DependencyInjection;
+using TelegramBotKit.Dispatching;
 using TelegramBotKit.Fallbacks;
 using TelegramBotKit.Hosting;
 using TelegramBotKit.Sample.ConsolePolling;
@@ -10,20 +11,19 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
+builder.Services.AddSingleton<IDefaultMessageHandler, SampleDefaultHandlers>();
+builder.Services.AddSingleton<IDefaultCallbackHandler, SampleDefaultHandlers>();
+builder.Services.AddSingleton<IDefaultUpdateHandler, SampleDefaultHandlers>();
+
 var bot = builder.Services.AddTelegramBotKit(opt =>
 {
     builder.Configuration.GetSection("TelegramBotKit").Bind(opt);
 });
 
 builder.Services.AddCommands();
-
-builder.Services.AddSingleton<IDefaultMessageHandler, SampleDefaultHandlers>();
-builder.Services.AddSingleton<IDefaultCallbackHandler, SampleDefaultHandlers>();
-builder.Services.AddSingleton<IDefaultUpdateHandler, SampleDefaultHandlers>();
-
 bot.UseMiddleware<TraceLoggingMiddleware>();
 
-
+bot.Route(UpdateRoutes.EditedMessage).HandleWith<EditedMessageHandler>();
 bot.UseQueuedMessageSender(o =>
 {
     o.GlobalMaxPerSecond = 25;

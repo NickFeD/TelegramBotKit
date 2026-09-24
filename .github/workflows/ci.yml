@@ -51,6 +51,11 @@ jobs:
             dotnet build "$proj" -c Release --no-restore
           done
 
+      - name: Test update routing
+        run: |
+          dotnet restore tests/TelegramBotKit.Tests/TelegramBotKit.Tests.csproj --locked-mode
+          dotnet test tests/TelegramBotKit.Tests/TelegramBotKit.Tests.csproj -c Release --no-restore
+
       - name: Pack (all packages) - src only
         run: |
           set -euo pipefail
