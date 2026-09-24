@@ -20,13 +20,13 @@ public static class MessageSenderExtensions
         // Message-based
         // -------------------------
 
-        /// <summary>Send text to the same chat as <paramref name="message"/>.</summary>
+        /// <summary>Send text to the same chat and, unless explicitly overridden, thread as <paramref name="message"/>.</summary>
         public Task<Message> SendText(Message message, SendText msg, CancellationToken ct = default)
-            => sender.SendText(message.Chat.Id, msg, ct);
+            => sender.SendText(message.Chat.Id, msg with { MessageThreadId = msg.MessageThreadId ?? message.MessageThreadId }, ct);
 
-        /// <summary>Send photo to the same chat as <paramref name="message"/>.</summary>
+        /// <summary>Send photo to the same chat and, unless explicitly overridden, thread as <paramref name="message"/>.</summary>
         public Task<Message> SendPhoto(Message message, SendPhoto msg, CancellationToken ct = default)
-            => sender.SendPhoto(message.Chat.Id, msg, ct);
+            => sender.SendPhoto(message.Chat.Id, msg with { MessageThreadId = msg.MessageThreadId ?? message.MessageThreadId }, ct);
 
         /// <summary>Edit the given <paramref name="message"/> text (by chatId + messageId).</summary>
         public Task<Message> EditText(Message message, EditText edit, CancellationToken ct = default)
@@ -50,11 +50,39 @@ public static class MessageSenderExtensions
             => sender.AnswerCallback(callback.Id, answer, ct);
 
         /// <summary>
-        /// Send text to the chat where the callback originated.
+        /// Send text to the chat and, unless explicitly overridden, thread where the callback originated.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
         public Task<Message> SendText(CallbackQuery callback, SendText msg, CancellationToken ct = default)
-            => sender.SendText(RequireCallbackMessage(callback).Chat.Id, msg, ct);
+            => sender.SendText(RequireCallbackMessage(callback), msg, ct);
+
+        /// <summary>
+        /// Send a photo to the callback message's chat and, unless explicitly overridden, thread.
+        /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
+        /// </summary>
+        public Task<Message> SendPhoto(CallbackQuery callback, SendPhoto msg, CancellationToken ct = default)
+            => sender.SendPhoto(RequireCallbackMessage(callback), msg, ct);
+
+        /// <summary>
+        /// Reply with a photo to the callback message, inheriting its thread unless explicitly overridden.
+        /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
+        /// </summary>
+        public Task<Message> ReplyPhoto(CallbackQuery callback, SendPhoto msg, CancellationToken ct = default)
+            => sender.ReplyPhoto(RequireCallbackMessage(callback), msg, ct);
+
+        /// <summary>Try to send a photo in the callback message's chat and thread. Returns false and a null task for inline callbacks.</summary>
+        public bool TrySendPhoto(CallbackQuery callback, SendPhoto msg, out Task<Message>? task, CancellationToken ct = default)
+        {
+            task = callback.Message is { } message ? sender.SendPhoto(message, msg, ct) : null;
+            return task is not null;
+        }
+
+        /// <summary>Try to reply with a photo, inheriting the callback message's thread. Returns false and a null task for inline callbacks.</summary>
+        public bool TryReplyPhoto(CallbackQuery callback, SendPhoto msg, out Task<Message>? task, CancellationToken ct = default)
+        {
+            task = callback.Message is { } message ? sender.ReplyPhoto(message, msg, ct) : null;
+            return task is not null;
+        }
 
         /// <summary>
         /// Reply to the message from which the callback originated.
@@ -110,7 +138,7 @@ public static class MessageSenderExtensions
                 return false;
             }
 
-            task = sender.SendText(callback.Message.Chat.Id, msg, ct);
+            task = sender.SendText(callback.Message, msg, ct);
             return true;
         }
 

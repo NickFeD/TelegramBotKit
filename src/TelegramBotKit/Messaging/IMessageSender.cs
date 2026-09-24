@@ -10,17 +10,17 @@ namespace TelegramBotKit.Messaging;
 public interface IMessageSender
 {
     /// <summary>
-    /// Sends the text.
+    /// Sends text to the chat and optional thread specified by the request.
     /// </summary>
     Task<Message> SendText(long chatId, SendText msg, CancellationToken ct = default);
 
     /// <summary>
-    /// Replies with the text.
+    /// Replies with text, inheriting the source thread unless the request specifies one.
     /// </summary>
     Task<Message> ReplyText(Message replyTo, SendText msg, CancellationToken ct = default);
 
     /// <summary>
-    /// Sends the photo.
+    /// Sends a photo to the chat and optional thread specified by the request.
     /// </summary>
     Task<Message> SendPhoto(long chatId, SendPhoto msg, CancellationToken ct = default);
 
@@ -40,7 +40,7 @@ public interface IMessageSender
 
 
     /// <summary>
-    /// Replies with the photo.
+    /// Replies with a photo, inheriting the source thread unless the request specifies one.
     /// </summary>
     Task<Message> ReplyPhoto(Message replyTo, SendPhoto msg, CancellationToken ct = default);
 

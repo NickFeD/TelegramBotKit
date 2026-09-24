@@ -19,6 +19,7 @@ internal sealed class MessageSender : IMessageSender
 
         return _bot.SendMessage(
             chatId: chatId,
+            messageThreadId: msg.MessageThreadId,
             text: msg.Text,
             parseMode: msg.ParseMode,
             linkPreviewOptions: msg.LinkPreviewOptions,
@@ -36,6 +37,7 @@ internal sealed class MessageSender : IMessageSender
 
         return _bot.SendMessage(
             chatId: replyTo.Chat.Id,
+            messageThreadId: msg.MessageThreadId ?? replyTo.MessageThreadId,
             text: msg.Text,
             parseMode: msg.ParseMode,
             linkPreviewOptions: msg.LinkPreviewOptions,
@@ -55,6 +57,7 @@ internal sealed class MessageSender : IMessageSender
 
         return _bot.SendPhoto(
             chatId: chatId,
+            messageThreadId: msg.MessageThreadId,
             photo: msg.Photo,
             caption: msg.Caption,
             parseMode: msg.ParseMode,
@@ -73,6 +76,7 @@ internal sealed class MessageSender : IMessageSender
 
         return _bot.SendPhoto(
             chatId: replyTo.Chat.Id,
+            messageThreadId: msg.MessageThreadId ?? replyTo.MessageThreadId,
             photo: msg.Photo,
             caption: msg.Caption,
             parseMode: msg.ParseMode,

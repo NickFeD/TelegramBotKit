@@ -10,6 +10,12 @@ namespace TelegramBotKit.Messaging;
 public sealed record SendPhoto
 {
     /// <summary>
+    /// Gets the destination forum topic. When null, message-based sends and replies
+    /// inherit the source message's thread; explicit chat sends omit the thread.
+    /// </summary>
+    public int? MessageThreadId { get; init; }
+
+    /// <summary>
     /// Gets or sets the photo.
     /// </summary>
     public required InputFile Photo { get; init; }
