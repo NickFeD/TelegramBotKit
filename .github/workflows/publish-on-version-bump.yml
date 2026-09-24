@@ -9,6 +9,10 @@ permissions:
   contents: write
   id-token: write
 
+concurrency:
+  group: nuget-publication
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -22,9 +26,6 @@ jobs:
       # secrets -> env (и дальше в if используем env.*)
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       NUGET_USER: ${{ secrets.NUGET_USER }}
-
-      # "якорный" пакет для проверки версии на nuget.org
-      CHECK_PACKAGE_ID: TelegramBotKit
 
     steps:
       - name: Checkout
@@ -47,7 +48,7 @@ jobs:
 
           version = None
           for el in root.iter():
-            if el.tag.endswith("Version") and (el.text or "").strip():
+            if el.tag == "Version" and (el.text or "").strip():
               version = el.text.strip()
               break
 
@@ -59,90 +60,31 @@ jobs:
           print(f"Version: {version}")
           PY
 
-      - name: Check if version exists on nuget.org
-        id: nugetcheck
+      - name: Reject existing package versions or release tags
         shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.ver.outputs.version }}"
-          ID="${CHECK_PACKAGE_ID}"
-          ID_LC="$(echo "$ID" | tr '[:upper:]' '[:lower:]')"
-          URL="https://api.nuget.org/v3-flatcontainer/${ID_LC}/index.json"
-
-          echo "Checking: $ID $VERSION"
-          echo "URL: $URL"
-
-          python - <<'PY'
-          import json, os, sys, urllib.request, urllib.error
-
-          url = os.environ["URL"]
-          version = os.environ["VERSION"]
-
-          try:
-            with urllib.request.urlopen(url, timeout=20) as r:
-              data = r.read().decode("utf-8")
-          except urllib.error.HTTPError as e:
-            if e.code == 404:
-              # пакета ещё нет на nuget.org
-              open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8").write("exists=false\n")
-              print("Package not found (404).")
-              sys.exit(0)
-            raise
-
-          obj = json.loads(data)
-          versions = set(obj.get("versions", []))
-          exists = version in versions
-
-          open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8").write(f"exists={'true' if exists else 'false'}\n")
-          print("Exists:", exists)
-          PY
-        env:
-          URL: ${{ '' }} # не используем expressions для URL
-          VERSION: ${{ steps.ver.outputs.version }}
-
-      - name: Skip publish (already exists)
-        if: steps.nugetcheck.outputs.exists == 'true'
-        shell: bash
-        run: |
-          echo "Already published: $CHECK_PACKAGE_ID ${{ steps.ver.outputs.version }}. Skipping."
-          exit 0
+          python scripts/release.py check-version
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            echo "Tag v$VERSION already exists. Choose a new version." >&2
+            exit 1
+          fi
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
-          dotnet-quality: preview
+          global-json-file: global.json
           cache: true
           cache-dependency-path: |
             **/packages.lock.json
 
-      - name: Restore (locked) - src only
-        shell: bash
-        run: |
-          set -euo pipefail
-          for proj in src/*/*.csproj; do
-            echo "Restoring $proj"
-            dotnet restore "$proj" --locked-mode
-          done
+      - name: Restore, build, test, build samples, pack and validate
+        run: python scripts/release.py build
 
-      - name: Build - src only
-        shell: bash
-        run: |
-          set -euo pipefail
-          for proj in src/*/*.csproj; do
-            echo "Building $proj"
-            dotnet build "$proj" -c Release --no-restore
-          done
-
-      - name: Pack - src only
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          for proj in src/*/*.csproj; do
-            echo "Packing $proj"
-            dotnet pack "$proj" -c Release -o artifacts --no-build
-          done
+      - name: Recheck version uniqueness before publication
+        run: python scripts/release.py check-version
 
       - name: Validate NuGet publish settings
         shell: bash
@@ -177,17 +119,16 @@ jobs:
           fi
 
           shopt -s nullglob
-          for f in artifacts/*.nupkg; do
+          for f in artifacts/packages/*.nupkg; do
             echo "Pushing $f"
-            dotnet nuget push "$f" -k "$KEY" -s "$NUGET_SOURCE" --skip-duplicate
+            dotnet nuget push "$f" -k "$KEY" -s "$NUGET_SOURCE" --no-symbols
           done
-          for f in artifacts/*.snupkg; do
+          for f in artifacts/packages/*.snupkg; do
             echo "Pushing $f"
-            dotnet nuget push "$f" -k "$KEY" -s "$NUGET_SOURCE" --skip-duplicate
+            dotnet nuget push "$f" -k "$KEY" -s "$NUGET_SOURCE"
           done
 
-      # OPTIONAL: tag + GitHub release
-      - name: Create tag vX.Y.Z (optional)
+      - name: Create tag vX.Y.Z
         shell: bash
         run: |
           set -euo pipefail
@@ -195,8 +136,8 @@ jobs:
           TAG="v$VERSION"
 
           if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG already exists. Skipping."
-            exit 0
+            echo "Tag $TAG already exists. Choose a new version." >&2
+            exit 1
           fi
 
           git config user.name "github-actions[bot]"
@@ -204,11 +145,13 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
 
-      - name: Create GitHub Release (optional)
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
+          prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
           generate_release_notes: true
           files: |
-            artifacts/*.nupkg
-            artifacts/*.snupkg
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+            artifacts/packages/SHA256SUMS

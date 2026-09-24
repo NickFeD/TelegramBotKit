@@ -22,9 +22,7 @@ jobs:
       - name: Setup .NET (pinned)
         uses: actions/setup-dotnet@v5
         with:
-          # ПИНУЕМ ПАТЧ, чтобы не прыгали SDK-паки (ILLink.Tasks и т.п.)
-          dotnet-version: 10.0.103
-          dotnet-quality: preview
+          global-json-file: global.json
           cache: true
           cache-dependency-path: |
             **/packages.lock.json
@@ -35,56 +33,21 @@ jobs:
           dotnet --list-sdks
           dotnet --list-runtimes
 
-      - name: Restore (locked) - src only
-        run: |
-          set -euo pipefail
-          for proj in src/*/*.csproj; do
-            echo "Restoring (locked) $proj"
-            dotnet restore "$proj" --locked-mode
-          done
-
-      - name: Build - src only
-        run: |
-          set -euo pipefail
-          for proj in src/*/*.csproj; do
-            echo "Building $proj"
-            dotnet build "$proj" -c Release --no-restore
-          done
-
-      - name: Test update routing
-        run: |
-          dotnet restore tests/TelegramBotKit.Tests/TelegramBotKit.Tests.csproj --locked-mode
-          dotnet test tests/TelegramBotKit.Tests/TelegramBotKit.Tests.csproj -c Release --no-restore
-
-      - name: Pack (all packages) - src only
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          for proj in src/*/*.csproj; do
-            echo "Packing $proj"
-            dotnet pack "$proj" -c Release -o artifacts --no-build
-          done
-
-      - name: Build samples
-        run: |
-          set -euo pipefail
-          for proj in samples/*/*.csproj; do
-            echo "Restoring sample (locked) $proj"
-            dotnet restore "$proj" --locked-mode
-            echo "Building sample $proj"
-            dotnet build "$proj" -c Release --no-restore
-          done
+      - name: Restore, build, test, build samples, pack and validate
+        run: python scripts/release.py build
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
-          path: artifacts/*.nupkg
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/SHA256SUMS
           if-no-files-found: error
 
       - name: Upload symbols
         uses: actions/upload-artifact@v4
         with:
           name: nuget-symbols
-          path: artifacts/*.snupkg
-          if-no-files-found: ignore
+          path: artifacts/packages/*.snupkg
+          if-no-files-found: error
