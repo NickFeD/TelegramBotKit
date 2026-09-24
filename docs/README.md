@@ -19,11 +19,12 @@ If you are new to TelegramBotKit, start with:
 - [Hosting](hosting.md) — polling and update scheduling
 - [Update routes](updates.md) — built-in/custom descriptors, local middleware and terminals
 - [Conversations](conversations.md) — `WaitForUserResponse` patterns and gotchas
+- [Messaging](messaging.md) — sending, editing, callbacks and the optional queue
 - [Keyboards](keyboards.md) — inline and reply keyboard helpers
 
 ## Reference
 
-- [Public API (draft)](public-api.md) — intended public surface
+- [Public API map](public-api.md) — conceptual supported surface
 
 ## Project docs
 

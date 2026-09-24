@@ -1,73 +1,98 @@
 # Middleware
 
-← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
+[Docs index](README.md) · [Processing pipeline](processing-pipeline.md) · [Typed routes](updates.md)
 
-TelegramBotKit processes every update through a middleware pipeline (similar to ASP.NET Core).
+TelegramBotKit has two middleware façades and one terminal contract:
 
-## Inline middleware
+| Role | Contract | Context | Scope |
+|---|---|---|---|
+| Global middleware | `IUpdateMiddleware` | `BotContext` | Every update type |
+| Typed route middleware | `IUpdateRouteMiddleware<TPayload>` | `UpdateRouteContext<TPayload>` | One configured route |
+| Route terminal | `IUpdatePayloadHandler<TPayload>` | Payload plus `BotContext` | Final owner of one route |
+
+Both middleware contracts use nested execution: the first registered component is
+outermost, omitting `next` short-circuits downstream processing, and exceptions unwind
+through upstream middleware.
+
+## Global middleware
+
+Use global middleware for logging, metrics, authorization, throttling, and other
+update-wide policies:
 
 ```csharp
-bot.UseMiddleware(async (ctx, next) =>
+bot.UseMiddleware(async (context, next) =>
 {
-    // before
-    await next(ctx);
-    // after
+    // Before routing.
+    await next(context);
+    // After routing and its terminal/fallback.
 });
 ```
 
-For minimal allocations, you can also use the `ValueTask` overload:
+For paths that often complete synchronously, a `ValueTask` overload is available:
 
 ```csharp
-bot.UseMiddleware((ctx, next) =>
+bot.UseMiddleware((context, next) =>
 {
-    if (ctx.Update.Id % 2 == 0)
-        return new ValueTask(next(ctx));
+    if (context.Update.Id % 2 == 0)
+        return new ValueTask(next(context));
 
-    return ValueTask.CompletedTask; // stop the pipeline
+    return ValueTask.CompletedTask;
 });
 ```
 
-## Class-based middleware
-
-Implement `IUpdateMiddleware`:
+Class-based global middleware implements `IUpdateMiddleware`:
 
 ```csharp
 using TelegramBotKit.Middleware;
 
-public sealed class TraceMiddleware : IUpdateMiddleware
+public sealed class TraceMiddleware(ILogger<TraceMiddleware> log) : IUpdateMiddleware
 {
-    private readonly ILogger<TraceMiddleware> _log;
-
-    public TraceMiddleware(ILogger<TraceMiddleware> log) => _log = log;
-
-    public async Task InvokeAsync(BotContext ctx, BotContextDelegate next)
+    public async Task InvokeAsync(BotContext context, BotContextDelegate next)
     {
-        _log.LogInformation("<< {UpdateId}", ctx.Update.Id);
-        await next(ctx);
-        _log.LogInformation(">> {UpdateId}", ctx.Update.Id);
+        log.LogInformation("Handling {UpdateType}", context.Update.Type);
+        await next(context);
     }
 }
-```
 
-Register and use:
-
-```csharp
-builder.Services.AddSingleton<TraceMiddleware>();
 bot.UseMiddleware<TraceMiddleware>();
 ```
 
-### Lifetimes
+## Typed route middleware
 
-- Class middleware defaults to scoped; existing concrete DI registrations are respected.
-- Global and route middleware resolve from the per-update scope, supporting scoped constructor dependencies.
-- Explicit singletons must not capture scoped dependencies.
-- `bot.Route(descriptor).Use<TMiddleware>()` adds middleware to one route; see [update routes](updates.md) for default-route ownership and migration.
+Use typed route middleware when behavior depends on one route's payload:
 
-## Ordering
+```csharp
+using Telegram.Bot.Types;
+using TelegramBotKit.Dispatching;
 
-Middlewares run in the order you register them:
+public sealed class EditedMessageFilter : IUpdateRouteMiddleware<Message>
+{
+    public Task InvokeAsync(
+        UpdateRouteContext<Message> context,
+        UpdateRouteDelegate<Message> next)
+    {
+        if (context.Payload.Text is null)
+            return Task.CompletedTask;
 
-- First registered middleware is executed first (outermost).
-- Last registered middleware is executed last (innermost).
+        return next(context);
+    }
+}
 
-If middleware does **not** call `next(ctx)`, the pipeline stops and routing/fallback handlers will not run.
+bot.Route(UpdateRoutes.EditedMessage)
+   .Use<EditedMessageFilter>()
+   .HandleWith<EditedMessageHandler>();
+```
+
+The payload has already been extracted and is available as `context.Payload`.
+See [typed update routes](updates.md) for inline middleware, route ownership, and
+custom descriptors.
+
+`UseUpdateMiddleware(...)` exists only to adapt an existing `IUpdateMiddleware` to a
+route. Prefer `.Use(...)` and `IUpdateRouteMiddleware<TPayload>` for new route-local
+code.
+
+## Lifetimes
+
+Class middleware defaults to scoped. Existing concrete DI registrations are
+respected, and scoped dependencies remain alive until both pipelines unwind. An
+explicit singleton must not capture scoped services.

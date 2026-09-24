@@ -25,11 +25,6 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
-    <!-- XML docs policy: docs for packages, no noise for samples/tools -->
-    <GenerateDocumentationFile Condition="'$(IsPackable)'=='true'">true</GenerateDocumentationFile>
-    <GenerateDocumentationFile Condition="'$(IsPackable)'!='true'">false</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);1591</NoWarn>
-    
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 

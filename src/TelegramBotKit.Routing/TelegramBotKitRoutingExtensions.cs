@@ -43,7 +43,7 @@ public static class TelegramBotKitRoutingExtensions
     /// </summary>
     /// <param name="builder">TelegramBotKit builder.</param>
     /// <param name="command">Slash command (with or without leading <c>/</c>).</param>
-    /// <param name="handler">Handler delegate. <paramref name="sp"/> is resolved from <see cref="BotContext.Services"/>.</param>
+    /// <param name="handler">Handler delegate whose service-provider argument comes from <see cref="BotContext.Services"/>.</param>
     /// <returns>The same <paramref name="builder"/> instance for chaining.</returns>
     public static TelegramBotKitBuilder UseMessageCommand(
         this TelegramBotKitBuilder builder,

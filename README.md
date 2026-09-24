@@ -1,66 +1,32 @@
 # TelegramBotKit
 
-TelegramBotKit is a lightweight toolkit for building Telegram bots on .NET with a structured update pipeline, typed handlers, and simple command routing.
+TelegramBotKit is a .NET 10 toolkit for building Telegram bots with polling hosting,
+commands, strongly typed update routes, and nested middleware.
 
-📚 **Start here:** **[Documentation index](docs/README.md)**
+Its core features include:
+
+- polling through `Microsoft.Extensions.Hosting`;
+- global middleware for update-wide policies;
+- strongly typed `UpdateType` routes and route-local middleware;
+- one typed terminal handler per route;
+- message, text, and callback commands;
+- simple request/response conversations;
+- messaging and keyboard helpers;
+- an optional queued sender;
+- an optional command source generator;
+- custom descriptors for future Telegram update types.
+
+See the [documentation index](docs/README.md) for feature guides and the
+[Quick Start](docs/quickstart.md) for the smallest working bot.
 
 ## Packages
 
-- `TelegramBotKit` — core pipeline, dispatching, commands, messaging helpers.
-- `TelegramBotKit.Hosting` — polling/hosting integration.
-- `TelegramBotKit.Routing` — optional ASP.NET-style `Use*` routing sugar.
-- `TelegramBotKit.Generators` — optional Roslyn source generator for compile-time `AddCommands()` registration.
+- `TelegramBotKit` — core configuration, commands, routes, middleware, and messaging.
+- `TelegramBotKit.Hosting` — polling and hosted-service integration.
+- `TelegramBotKit.Routing` — optional delegate-based command registration.
+- `TelegramBotKit.Generators` — optional compile-time command discovery.
 
-## Features
-
-- Middleware pipeline for update processing.
-- Typed `UpdateType` routes with one terminal handler and route-local middleware.
-- Message/text/callback commands (attributes + optional routing sugar).
-- `WaitForUserResponse` helper for request/response flows.
-- `IMessageSender` facade for sending messages.
-- Optional queued sender to reduce rate-limit errors.
-
-## Requirements
-
-- **.NET 10** (current target framework is `net10.0`).
-
-## Installation
-
-```bash
-dotnet add package TelegramBotKit
-dotnet add package TelegramBotKit.Hosting
-
-# optional
-dotnet add package TelegramBotKit.Routing
-
-# optional (compile-time AddCommands)
-dotnet add package TelegramBotKit.Generators
-````
-
-## Quick start (polling)
-
-1. Add configuration.
-
-Create `appsettings.json`:
-
-```json
-{
-  "TelegramBotKit": {
-    "Token": "PUT_YOUR_BOT_TOKEN_HERE",
-    "Polling": {
-      "MaxDegreeOfParallelism": 4,
-      "Limit": 100,
-      "TimeoutSeconds": 10,
-      "AllowedUpdates": []
-    }
-  }
-}
-```
-
-> `AllowedUpdates: []` means “allow all update types”.
-> If you want only specific types, list them explicitly.
-
-2. Create a host.
+## Minimal polling bot
 
 ```csharp
 using Microsoft.Extensions.Hosting;
@@ -69,69 +35,57 @@ using TelegramBotKit.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-
-var bot = builder.Services.AddTelegramBotKit(opt =>
-{
-    builder.Configuration.GetSection("TelegramBotKit").Bind(opt);
-});
-
-// Registers attributed commands.
-// If TelegramBotKit.Generators is installed, this is compile-time.
-// Otherwise it falls back to reflection-based discovery.
+builder.Services.AddTelegramBotKit(options =>
+    builder.Configuration.GetSection("TelegramBotKit").Bind(options));
 builder.Services.AddCommands();
-
-// Optional: queued sender (helps with Telegram rate limits)
-bot.UseQueuedMessageSender();
-
 builder.Services.AddTelegramBotKitPolling();
 
-var host = builder.Build();
-await host.RunAsync();
+await builder.Build().RunAsync();
 ```
 
-> Need a custom `HttpClient` for proxy, timeout, or custom handlers?
-> See [Quick start](docs/quickstart.md#using-a-custom-httpclient).
-
-3. Add a command.
+An attributed command is enough to handle `/start`:
 
 ```csharp
 using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
 using TelegramBotKit.Messaging;
 
-namespace MyBot.Commands;
-
 [MessageCommand("/start")]
 public sealed class StartCommand : IMessageCommand
 {
-    public Task HandleAsync(Message message, BotContext ctx)
-    {
-        return ctx.Sender.SendText(message.Chat.Id, new SendText
-        {
-            Text = "Hello."
-        }, ctx.CancellationToken);
-    }
+    public Task HandleAsync(Message message, BotContext context) =>
+        context.Sender.SendText(
+            message.Chat.Id,
+            new SendText { Text = "Hello." },
+            context.CancellationToken);
 }
+```
+
+Normal command bots do not configure `UpdateRoutes.Message` or
+`UpdateRoutes.CallbackQuery`; TelegramBotKit installs their command-processing routes
+automatically. Use `Route(...)` to handle another Telegram update type, add typed
+route-local middleware, or deliberately replace a built-in route.
+
+## Samples
+
+- `TelegramBotKit.Sample.MinimalPolling` contains only configuration, one `/start`
+  command, and polling.
+- `TelegramBotKit.Sample.ConsolePolling` demonstrates commands, fallbacks, global and
+  typed route middleware, an edited-message route, keyboards, conversations, and the
+  queued sender.
+
+```bash
+dotnet run --project samples/TelegramBotKit.Sample.MinimalPolling
 ```
 
 ## Documentation
 
-* **[Documentation index](docs/README.md)** (recommended starting point)
-* [Quickstart](docs/quickstart.md)
-* [Commands and routing](docs/commands-and-routing.md)
-* [Update routes and typed handlers](docs/updates.md)
-* [Middleware](docs/middleware.md)
-* [Hosting / Polling](docs/hosting.md)
-* [Conversations (`WaitForUserResponse`)](docs/conversations.md)
-* [Keyboards](docs/keyboards.md)
-* [Public API notes](docs/public-api.md)
-* [Releasing](docs/releasing.md)
-
-## Running the sample
-
-The console polling sample keeps the built-in Message/CallbackQuery command routes and adds an independent terminal for edited messages with `Route(UpdateRoutes.EditedMessage).HandleWith<EditedMessageHandler>()`.
-
-```bash
-dotnet run --project samples/TelegramBotKit.Sample.ConsolePolling
-```
+- [Quick Start](docs/quickstart.md)
+- [Commands](docs/commands-and-routing.md)
+- [Typed update routes](docs/updates.md)
+- [Middleware](docs/middleware.md)
+- [Messaging](docs/messaging.md)
+- [Hosting](docs/hosting.md)
+- [Conversations](docs/conversations.md)
+- [Keyboards](docs/keyboards.md)
+- [Public API map](docs/public-api.md)

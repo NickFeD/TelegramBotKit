@@ -93,6 +93,15 @@ public static class MessageSenderExtensions
             return sender.EditPhoto(m.Chat.Id, m.Id, edit, ct);
         }
 
+        /// <summary>
+        /// Tries to send text to the chat containing the callback message. Inline callbacks have no
+        /// <see cref="CallbackQuery.Message"/>, so this returns false and sets <paramref name="task"/> to null.
+        /// </summary>
+        /// <param name="callback">The callback whose message identifies the destination chat.</param>
+        /// <param name="msg">The text request to send.</param>
+        /// <param name="task">The send operation, or null when the callback has no message.</param>
+        /// <param name="ct">A token that cancels the Telegram request.</param>
+        /// <returns>True when the operation was created; false for an inline callback without a message.</returns>
         public bool TrySendText(CallbackQuery callback, SendText msg, out Task<Message>? task, CancellationToken ct = default)
         {
             if (callback.Message is null)
@@ -105,6 +114,15 @@ public static class MessageSenderExtensions
             return true;
         }
 
+        /// <summary>
+        /// Tries to reply to the callback message. Inline callbacks have no
+        /// <see cref="CallbackQuery.Message"/>, so this returns false and sets <paramref name="task"/> to null.
+        /// </summary>
+        /// <param name="callback">The callback whose message will be replied to.</param>
+        /// <param name="msg">The text request to send as a reply.</param>
+        /// <param name="task">The send operation, or null when the callback has no message.</param>
+        /// <param name="ct">A token that cancels the Telegram request.</param>
+        /// <returns>True when the operation was created; false for an inline callback without a message.</returns>
         public bool TryReplyText(CallbackQuery callback, SendText msg, out Task<Message>? task, CancellationToken ct = default)
         {
             if (callback.Message is null)
@@ -117,6 +135,15 @@ public static class MessageSenderExtensions
             return true;
         }
 
+        /// <summary>
+        /// Tries to edit the callback message text. Inline callbacks have no
+        /// <see cref="CallbackQuery.Message"/>, so this returns false and sets <paramref name="task"/> to null.
+        /// </summary>
+        /// <param name="callback">The callback whose message will be edited.</param>
+        /// <param name="edit">The text edit request.</param>
+        /// <param name="task">The edit operation, or null when the callback has no message.</param>
+        /// <param name="ct">A token that cancels the Telegram request.</param>
+        /// <returns>True when the operation was created; false for an inline callback without a message.</returns>
         public bool TryEditText(CallbackQuery callback, EditText edit, out Task<Message>? task, CancellationToken ct = default)
         {
             if (callback.Message is null)
@@ -129,6 +156,15 @@ public static class MessageSenderExtensions
             return true;
         }
 
+        /// <summary>
+        /// Tries to edit the callback message keyboard. Inline callbacks have no
+        /// <see cref="CallbackQuery.Message"/>, so this returns false and sets <paramref name="task"/> to null.
+        /// </summary>
+        /// <param name="callback">The callback whose message markup will be edited.</param>
+        /// <param name="keyboard">The replacement keyboard, or null to remove it.</param>
+        /// <param name="task">The edit operation, or null when the callback has no message.</param>
+        /// <param name="ct">A token that cancels the Telegram request.</param>
+        /// <returns>True when the operation was created; false for an inline callback without a message.</returns>
         public bool TryEditReplyMarkup(CallbackQuery callback, InlineKeyboardMarkup? keyboard, out Task? task, CancellationToken ct = default)
         {
             if (callback.Message is null)
@@ -141,6 +177,15 @@ public static class MessageSenderExtensions
             return true;
         }
 
+        /// <summary>
+        /// Tries to edit the callback message photo. Inline callbacks have no
+        /// <see cref="CallbackQuery.Message"/>, so this returns false and sets <paramref name="task"/> to null.
+        /// </summary>
+        /// <param name="callback">The callback whose message photo will be edited.</param>
+        /// <param name="edit">The media edit request.</param>
+        /// <param name="task">The edit operation, or null when the callback has no message.</param>
+        /// <param name="ct">A token that cancels the Telegram request.</param>
+        /// <returns>True when the operation was created; false for an inline callback without a message.</returns>
         public bool TryEditPhoto(CallbackQuery callback, EditPhoto edit, out Task? task, CancellationToken ct = default)
         {
             if (callback.Message is null)

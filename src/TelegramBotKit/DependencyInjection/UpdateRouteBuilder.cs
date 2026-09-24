@@ -5,7 +5,8 @@ using TelegramBotKit.Middleware;
 
 namespace TelegramBotKit.DependencyInjection;
 
-/// <summary>Composes one route with middleware and at most one terminal.</summary>
+/// <summary>Configures typed middleware and the optional single terminal for one update route.</summary>
+/// <typeparam name="TPayload">The payload selected by the route descriptor.</typeparam>
 public sealed class UpdateRouteBuilder<TPayload> where TPayload : class
 {
     private readonly IServiceCollection _services;
@@ -13,7 +14,10 @@ public sealed class UpdateRouteBuilder<TPayload> where TPayload : class
     internal UpdateRouteBuilder(IServiceCollection services, RouteRegistration<TPayload> registration)
         => (_services, _registration) = (services, registration);
 
-    /// <summary>Assigns this route's single terminal, resolved from the update scope.</summary>
+    /// <summary>Assigns the route's single typed terminal, resolved from the per-update scope.</summary>
+    /// <typeparam name="THandler">The concrete handler for this route's payload type.</typeparam>
+    /// <param name="lifetime">The DI lifetime used when the concrete handler is not already registered.</param>
+    /// <returns>This route builder for continued configuration.</returns>
     /// <exception cref="TelegramBotKitRegistrationException">The route already has a terminal.</exception>
     public UpdateRouteBuilder<TPayload> HandleWith<THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where THandler : class, IUpdatePayloadHandler<TPayload>
@@ -28,6 +32,9 @@ public sealed class UpdateRouteBuilder<TPayload> where TPayload : class
     /// Adds typed route-local middleware resolved from the per-update scope.
     /// The middleware receives the payload selected for this route and may short-circuit its terminal.
     /// </summary>
+    /// <typeparam name="TMiddleware">The concrete middleware compatible with this route's payload type.</typeparam>
+    /// <param name="lifetime">The DI lifetime used when the concrete middleware is not already registered.</param>
+    /// <returns>This route builder for continued configuration.</returns>
     public UpdateRouteBuilder<TPayload> Use<TMiddleware>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TMiddleware : class, IUpdateRouteMiddleware<TPayload>
     {
@@ -42,6 +49,9 @@ public sealed class UpdateRouteBuilder<TPayload> where TPayload : class
     /// Adds inline typed route-local middleware in registration order, outermost first.
     /// The delegate receives the selected payload and may omit the continuation to short-circuit the route.
     /// </summary>
+    /// <param name="middleware">The typed route middleware delegate.</param>
+    /// <returns>This route builder for continued configuration.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="middleware"/> is null.</exception>
     public UpdateRouteBuilder<TPayload> Use(
         Func<UpdateRouteContext<TPayload>, UpdateRouteDelegate<TPayload>, Task> middleware)
     {
@@ -54,6 +64,9 @@ public sealed class UpdateRouteBuilder<TPayload> where TPayload : class
     /// Adds update-wide middleware to this route through the compatibility adapter.
     /// Prefer <see cref="Use{TMiddleware}(ServiceLifetime)"/> for typed route-local middleware.
     /// </summary>
+    /// <typeparam name="TMiddleware">The concrete BotContext-only middleware to adapt.</typeparam>
+    /// <param name="lifetime">The DI lifetime used when the concrete middleware is not already registered.</param>
+    /// <returns>This route builder for continued configuration.</returns>
     public UpdateRouteBuilder<TPayload> UseUpdateMiddleware<TMiddleware>(
         ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TMiddleware : class, IUpdateMiddleware
@@ -70,6 +83,9 @@ public sealed class UpdateRouteBuilder<TPayload> where TPayload : class
     /// compatibility adapter. Prefer <see cref="Use(Func{UpdateRouteContext{TPayload}, UpdateRouteDelegate{TPayload}, Task})"/>
     /// when the middleware needs route payload typing.
     /// </summary>
+    /// <param name="middleware">The BotContext-only middleware delegate to adapt.</param>
+    /// <returns>This route builder for continued configuration.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="middleware"/> is null.</exception>
     public UpdateRouteBuilder<TPayload> UseUpdateMiddleware(
         Func<BotContext, BotContextDelegate, Task> middleware)
     {

@@ -36,6 +36,13 @@ Register all attributed commands:
 builder.Services.AddCommands();
 ```
 
+That registration also installs the built-in message and callback-query command
+processing. A normal command bot does not need to add
+`Route(UpdateRoutes.Message)` or `Route(UpdateRoutes.CallbackQuery)` itself. Use an
+explicit update route when handling another Telegram update type, adding typed
+route-local middleware, or deliberately replacing a built-in route; see
+[Update routes](updates.md).
+
 Notes:
 - If `TelegramBotKit.Generators` is installed, `AddCommands()` is compile-time.
 - Otherwise it falls back to reflection-based discovery.

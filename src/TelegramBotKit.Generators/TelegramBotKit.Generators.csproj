@@ -23,7 +23,7 @@
 		<Description>Roslyn source generator for TelegramBotKit that generates AddCommands() registrations at compile time.</Description>
 		<PackageTags>telegram;telegram-bot;bot;source-generator;analyzer;dotnet</PackageTags>
 
-		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 
 		<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
 

@@ -5,7 +5,8 @@ This roadmap is intentionally short. It is not a promise—just a direction.
 ## Current (MVP)
 
 - Polling hosting (`GetUpdates`)
-- `BotContext` + middleware pipeline
+- `BotContext`, global middleware, and typed route-local middleware
+- Strongly typed `UpdateType` routes with one terminal handler per route
 - Command routing: message slash commands, exact text commands, callback commands
 - `WaitForUserResponse` (in-memory)
 - Optional source-generator path for `AddCommands()` (reflection fallback is available)
@@ -14,7 +15,6 @@ This roadmap is intentionally short. It is not a promise—just a direction.
 
 - Keep improving documentation and samples
 - API consistency and naming polish
-- More guidance on typed update routes and local pipelines
 - Performance tuning in hot paths (router, registry, middleware pipeline, sender)
 
 ## Medium term

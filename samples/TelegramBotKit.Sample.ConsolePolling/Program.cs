@@ -23,7 +23,9 @@ var bot = builder.Services.AddTelegramBotKit(opt =>
 builder.Services.AddCommands();
 bot.UseMiddleware<TraceLoggingMiddleware>();
 
-bot.Route(UpdateRoutes.EditedMessage).HandleWith<EditedMessageHandler>();
+bot.Route(UpdateRoutes.EditedMessage)
+    .Use<EditedMessageAuditMiddleware>()
+    .HandleWith<EditedMessageHandler>();
 bot.UseQueuedMessageSender(o =>
 {
     o.GlobalMaxPerSecond = 25;

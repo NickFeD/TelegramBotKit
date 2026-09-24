@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
 
     <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>TelegramBotKit</PackageId>
     <Description>Toolkit for building Telegram bots with commands, middleware and lightweight request/response waits.</Description>
     <PackageTags>telegram;telegram-bot;bot;middleware;commands;dotnet</PackageTags>

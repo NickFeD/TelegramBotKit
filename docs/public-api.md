@@ -1,78 +1,120 @@
-# Public API surface (draft)
+# Public API map
 
-This document lists the intentionally public types that make up the supported surface of TelegramBotKit.
-Everything else in the repository should be treated as implementation detail and may change.
+This is a conceptual map of the supported public surface. IntelliSense XML
+documentation is the detailed contract for individual members.
 
-## TelegramBotKit (core)
+## Configuration
 
-### Dependency injection / configuration
-- TelegramBotKit.DependencyInjection.TelegramBotKitServiceCollectionExtensions
-  - AddTelegramBotKit(Action<TelegramBotKitOptions>)
-  - AddTelegramBotKit(Action<TelegramBotKitOptions>, HttpClient)
-  - AddTelegramBotKit(Action<TelegramBotKitOptions>, Func<IServiceProvider, HttpClient?>)
-  - AddCommands(...)
-  - AddMessageCommand<TCommand>(...)
-  - AddTextCommand<TCommand>(...)
-  - AddCallbackCommand<TCommand>(...)
-- TelegramBotKit.DependencyInjection.TelegramBotKitBuilder
-  - Route<TPayload>(UpdateRoute<TPayload>)
-- TelegramBotKit.DependencyInjection.UpdateRouteBuilder<TPayload>
-  - Use<TMiddleware>(...) / Use(Func<BotContext, BotContextDelegate, Task>)
-  - HandleWith<THandler>(...)
+`AddTelegramBotKit(...)` registers the core runtime and returns a
+`TelegramBotKitBuilder`. The builder configures global middleware, typed routes, and
+the optional queued sender. `AddCommands()` registers attributed command classes;
+explicit `AddMessageCommand`, `AddTextCommand`, and `AddCallbackCommand` methods are
+available when scanning is undesirable.
 
-### Pipeline
-- TelegramBotKit.BotContext
-- TelegramBotKit.Middleware.IUpdateMiddleware
+Primary types:
 
-### Fallbacks
-- TelegramBotKit.Fallbacks.IDefaultUpdateHandler
-- TelegramBotKit.Fallbacks.IDefaultMessageHandler
-- TelegramBotKit.Fallbacks.IDefaultCallbackHandler
+- `TelegramBotKitServiceCollectionExtensions`
+- `TelegramBotKitBuilder`
+- `UpdateRouteBuilder<TPayload>`
 
-### Commands
-- TelegramBotKit.Commands.ICommand
-- TelegramBotKit.Commands.IMessageCommand
-- TelegramBotKit.Commands.ITextCommand
-- TelegramBotKit.Commands.ICallbackCommand
-- TelegramBotKit.Commands.MessageCommandAttribute
-- TelegramBotKit.Commands.TextCommandAttribute
-- TelegramBotKit.Commands.CallbackCommandAttribute
+## Global update pipeline
 
-### Dispatching
-- TelegramBotKit.Dispatching.UpdateRoute<TPayload>
-- TelegramBotKit.Dispatching.UpdateRoute.Create<TPayload>(...)
-- TelegramBotKit.Dispatching.UpdateRoutes
-- TelegramBotKit.Dispatching.IUpdateDispatcher
-- TelegramBotKit.Dispatching.IUpdatePayloadHandler<TPayload>
+`BotContext` contains the raw Telegram update, bot client, message sender,
+per-update service provider, cancellation token, and an `Items` dictionary.
 
-### Messaging
-- TelegramBotKit.Messaging.IMessageSender
-- TelegramBotKit.Messaging.SendText / SendPhoto
-- TelegramBotKit.Messaging.EditText / EditPhoto
-- TelegramBotKit.Messaging.AnswerCallback
-- TelegramBotKit.Messaging.QueuedMessageSenderOptions
+`IUpdateMiddleware` and `BotContextDelegate` define global middleware that can
+surround routing for every update type or short-circuit it.
 
-### Conversations
-- TelegramBotKit.Conversations.WaitForUserResponse
+## Typed update routes
 
-### Keyboards
-- TelegramBotKit.Keyboards.Keyboard
+- `UpdateRoute<TPayload>` binds one `UpdateType` to a typed payload selector.
+- `UpdateRoute.Create(...)` creates custom descriptors, including descriptors for
+  future Telegram.Bot update types.
+- `UpdateRoutes` provides descriptors for the update properties supported by the
+  current Telegram.Bot dependency.
+- `UpdateRouteBuilder<TPayload>` composes typed middleware and zero or one terminal.
+- `UpdateRouteContext<TPayload>` exposes the selected payload and `BotContext`.
+- `UpdateRouteDelegate<TPayload>` is the public typed continuation.
+- `IUpdateRouteMiddleware<TPayload>` defines route-local nested middleware.
+- `IUpdatePayloadHandler<TPayload>` defines the route's single terminal handler.
 
-### Options
-- TelegramBotKit.Options.TelegramBotKitOptions
-- TelegramBotKit.Options.PollingOptions
-- TelegramBotKit.Options.WebhookOptions
-- TelegramBotKit.Options.UpdateDeliveryMode
+`.Use<TMiddleware>()` and inline `.Use(...)` are the primary typed route middleware
+APIs. `.UseUpdateMiddleware(...)` explicitly adapts an existing BotContext-only
+`IUpdateMiddleware`; it is a compatibility path rather than the preferred route API.
 
-### Exceptions
-- TelegramBotKit.Exceptions.TelegramBotKitException and derived exceptions
+## Commands
 
-## TelegramBotKit.Hosting
-- TelegramBotKit.Hosting.TelegramBotKitHostingServiceCollectionExtensions
+Command contracts cover slash messages, exact text triggers, and callback data:
 
-## TelegramBotKit.Routing
-- TelegramBotKit.Routing.TelegramBotKitRoutingExtensions
+- `IMessageCommand`, `ITextCommand`, `ICallbackCommand`, and their common `ICommand`
+  marker;
+- `MessageCommandAttribute`, `TextCommandAttribute`, and
+  `CallbackCommandAttribute`.
 
-## Notes
-- TelegramBotKit.DependencyInjection.TelegramBotKitGeneratedCommandsHook is public only to support the optional source generator.
-  It is not intended for direct use.
+The optional source generator emits registrations used by `AddCommands()`. Its
+public generated-code hooks are infrastructure and are not application extension
+points.
+
+## Messaging
+
+`IMessageSender` exposes send, reply, edit, and callback-answer operations. Request
+models include `SendText`, `SendPhoto`, `EditText`, `EditPhoto`, and
+`AnswerCallback`. Extension methods derive identifiers from `Message` and
+`CallbackQuery` payloads. Callback `Try*` methods safely report inline callbacks that
+do not contain a message.
+
+`QueuedMessageSenderOptions` configures the optional queued sender.
+
+## Fallbacks
+
+- `IDefaultMessageHandler` handles unmatched commands in the built-in Message route.
+- `IDefaultCallbackHandler` handles unmatched callback commands.
+- `IDefaultUpdateHandler` handles unregistered routes, routes without terminals, and
+  null selected payloads.
+
+Default implementations are no-ops and can be replaced through DI.
+
+## Conversations
+
+`WaitForUserResponse` supports one active in-memory wait per chat/user pair. It is a
+small request/response helper rather than a general conversation state machine.
+
+## Keyboards
+
+`Keyboard` creates inline and reply keyboards, callback buttons, URL buttons, and
+request buttons. `CallbackCommandKeyResolver` resolves generated callback keys for
+typed buttons.
+
+## Hosting
+
+The `TelegramBotKit.Hosting` package provides
+`AddTelegramBotKitPolling()` and hosted polling. Polling options control allowed
+updates, batch size, long-poll timeout, and concurrency.
+
+## Optional Routing package
+
+The `TelegramBotKit.Routing` package provides delegate-based `UseMessageCommand`,
+`UseTextCommand`, and `UseCallbackCommand` registration as an alternative to command
+classes.
+
+## Options
+
+- `TelegramBotKitOptions`
+- `PollingOptions`
+- `WebhookOptions`
+- `UpdateDeliveryMode`
+
+Webhook-related option types do not imply completed webhook hosting support.
+
+## Exceptions
+
+`TelegramBotKitException` is the base library exception. Derived configuration,
+registration, dispatch, and callback-data exceptions identify their corresponding
+failure categories.
+
+## Internal implementation
+
+`Pipeline<TContext>`, `PipelineDelegate<TContext>`, `IPipelineNode<TContext>`,
+`RouteRegistration<TPayload>`, and `UpdateHandlerRegistry` are implementation details.
+They are not public extension points. Applications extend the runtime through the
+public middleware, route, terminal, command, fallback, and messaging contracts above.

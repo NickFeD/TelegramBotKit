@@ -1,203 +1,150 @@
-# Quick start
+# Quick Start
 
-← [Docs index](README.md) · Next: [Processing pipeline](processing-pipeline.md)
+[Docs index](README.md) · Next: [Commands](commands-and-routing.md)
 
-This guide shows a minimal polling bot using **TelegramBotKit**.
+This guide builds the smallest polling bot with one `/start` command.
 
-## Requirements
-
-- **.NET 10** (TelegramBotKit currently targets `net10.0`).
-
-## 1) Install packages
+## 1. Create the project
 
 ```bash
+dotnet new console -n MyBot -f net10.0
+cd MyBot
 dotnet add package TelegramBotKit
 dotnet add package TelegramBotKit.Hosting
-# optional
-dotnet add package TelegramBotKit.Routing
-# optional (compile-time AddCommands)
-dotnet add package TelegramBotKit.Generators
 ```
 
-## 2) Configure
+`TelegramBotKit.Generators` is optional. Without it, `AddCommands()` discovers
+attributed commands through its reflection fallback.
+
+## 2. Add configuration
 
 Create `appsettings.json`:
 
 ```json
 {
   "TelegramBotKit": {
-    "Token": "PUT_YOUR_BOT_TOKEN_HERE",
-    "Polling": {
-      "MaxDegreeOfParallelism": 4,
-      "Limit": 100,
-      "TimeoutSeconds": 10,
-      "AllowedUpdates": []
-    }
+    "Token": "PUT_YOUR_BOT_TOKEN_HERE"
   }
 }
 ```
 
-Notes:
+Ensure the file is copied to the output directory:
 
-- `AllowedUpdates: []` means **all update types** (Telegram default). If you set it to a non-empty list, Telegram will only deliver the types you requested.
+```xml
+<ItemGroup>
+  <None Update="appsettings.json">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
+```
 
-## 3) Create a host
+## 3. Configure and run the host
+
+Replace `Program.cs` with:
 
 ```csharp
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+builder.Configuration.AddJsonFile("appsettings.json", optional: false);
 
-var bot = builder.Services.AddTelegramBotKit(opt =>
-{
-    builder.Configuration.GetSection("TelegramBotKit").Bind(opt);
-});
-
-// Registers attributed commands.
-// If TelegramBotKit.Generators is installed, this is compile-time.
-// Otherwise it falls back to reflection-based discovery.
+var bot = builder.Services.AddTelegramBotKit(options =>
+    builder.Configuration.GetSection("TelegramBotKit").Bind(options));
 builder.Services.AddCommands();
-
-bot.UseQueuedMessageSender();
-
 builder.Services.AddTelegramBotKitPolling();
 
-var host = builder.Build();
-await host.RunAsync();
+await builder.Build().RunAsync();
 ```
 
-## 4) Using a custom HttpClient
-
-`AddTelegramBotKit(...)` also supports passing a custom `HttpClient`.
-This is useful when you want to configure:
-
-- proxy settings
-- request timeout
-- custom delegating handlers
-- `IHttpClientFactory` integration
-
-> Prefer `IHttpClientFactory` for production applications.
-> Passing a pre-created `HttpClient` is fine for simple scenarios and tests.
-
-### Option A: pass a ready HttpClient
-
-```csharp
-using Microsoft.Extensions.Hosting;
-using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Hosting;
-
-var builder = Host.CreateApplicationBuilder(args);
-
-builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-
-var httpClient = new HttpClient
-{
-    Timeout = TimeSpan.FromSeconds(30)
-};
-
-var bot = builder.Services.AddTelegramBotKit(
-    opt => builder.Configuration.GetSection("TelegramBotKit").Bind(opt),
-    httpClient);
-
-builder.Services.AddCommands();
-bot.UseQueuedMessageSender();
-builder.Services.AddTelegramBotKitPolling();
-
-var host = builder.Build();
-await host.RunAsync();
-```
-
-### Option B: use IHttpClientFactory
-
-Using `IHttpClientFactory` is recommended for most applications.
-
-```csharp
-using Microsoft.Extensions.Hosting;
-using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Hosting;
-
-var builder = Host.CreateApplicationBuilder(args);
-
-builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-
-builder.Services.AddHttpClient("TelegramBotKit", client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-
-var bot = builder.Services.AddTelegramBotKit(
-    opt => builder.Configuration.GetSection("TelegramBotKit").Bind(opt),
-    sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("TelegramBotKit"));
-
-builder.Services.AddCommands();
-bot.UseQueuedMessageSender();
-builder.Services.AddTelegramBotKitPolling();
-
-var host = builder.Build();
-await host.RunAsync();
-```
-
-### Factory behavior
-
-The overload below accepts a nullable `HttpClient`:
-
-```csharp
-AddTelegramBotKit(
-    Action<TelegramBotKitOptions> configure,
-    Func<IServiceProvider, HttpClient?> httpClientFactory)
-```
-
-If the factory returns `null`, TelegramBotKit falls back to the default `TelegramBotClient` constructor.
-
-## 5) Add a command
+## 4. Add `/start`
 
 ```csharp
 using Telegram.Bot.Types;
 using TelegramBotKit.Commands;
 using TelegramBotKit.Messaging;
 
-namespace MyBot.Commands;
-
 [MessageCommand("/start")]
 public sealed class StartCommand : IMessageCommand
 {
-    public Task HandleAsync(Message message, BotContext ctx)
-    {
-        return ctx.Sender.SendText(message.Chat.Id, new SendText
-        {
-            Text = "Hello."
-        }, ctx.CancellationToken);
-    }
+    public Task HandleAsync(Message message, BotContext context) =>
+        context.Sender.SendText(
+            message.Chat.Id,
+            new SendText { Text = "Hello." },
+            context.CancellationToken);
 }
 ```
 
-Message and CallbackQuery use the built-in command routes unless you explicitly configure those routes.
-To handle another Telegram update type, register one typed terminal:
+Run the bot:
+
+```bash
+dotnet run
+```
+
+## You usually do not need `Route(...)`
+
+Normal command bots do not configure `UpdateRoutes.Message` or
+`UpdateRoutes.CallbackQuery`. TelegramBotKit installs built-in routes that handle
+message, text, and callback commands automatically.
+
+Use `Route(...)` when you want to:
+
+- handle another Telegram `UpdateType`;
+- add typed middleware to one route;
+- deliberately replace the built-in Message or CallbackQuery route.
+
+For example, handle edited messages with a typed terminal:
 
 ```csharp
 using Telegram.Bot.Types;
 using TelegramBotKit.Dispatching;
 
-bot.Route(UpdateRoutes.EditedMessage).HandleWith<EditedMessageHandler>();
+bot.Route(UpdateRoutes.EditedMessage)
+   .HandleWith<EditedMessageHandler>();
 
 public sealed class EditedMessageHandler : IUpdatePayloadHandler<Message>
 {
-    public Task HandleAsync(Message message, BotContext ctx)
-        => Task.CompletedTask;
+    public Task HandleAsync(Message message, BotContext context) =>
+        Task.CompletedTask;
 }
 ```
 
-`UpdateRoutes.Message` and `UpdateRoutes.EditedMessage` both carry `Message`, but each route owns its own terminal and middleware. Explicitly configuring Message or CallbackQuery replaces that route's built-in command terminal.
+Explicitly configuring Message or CallbackQuery replaces that route's built-in
+command terminal. See [typed update routes](updates.md) before doing so.
+
+## Optional queued sender
+
+Queued sending is useful for rate limiting, but it is not required for a working bot:
+
+```csharp
+bot.UseQueuedMessageSender(options =>
+{
+    options.GlobalMaxPerSecond = 25;
+    options.PerChatMinDelay = TimeSpan.FromSeconds(1);
+});
+```
+
+Call it after `AddTelegramBotKit` and before building the host.
+
+## Optional custom `HttpClient`
+
+`AddTelegramBotKit` also accepts either a ready `HttpClient` or a factory:
+
+```csharp
+builder.Services.AddTelegramBotKit(
+    options => builder.Configuration.GetSection("TelegramBotKit").Bind(options),
+    services => services.GetRequiredService<IHttpClientFactory>()
+        .CreateClient("TelegramBotKit"));
+```
+
+This is useful for proxies, custom handlers, and centralized timeout management.
 
 ## Next
 
-- Commands and routing: `./commands-and-routing.md`
-- Middleware: `./middleware.md`
-- Hosting: `./hosting.md`
-- Update routes and typed handlers: `./updates.md`
-- Conversations (WaitForUserResponse): `./conversations.md`
-- Keyboards: `./keyboards.md`
+- [Commands](commands-and-routing.md)
+- [Typed update routes](updates.md)
+- [Middleware](middleware.md)
+- [Hosting](hosting.md)

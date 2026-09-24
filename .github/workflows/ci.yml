@@ -65,11 +65,15 @@ jobs:
             dotnet pack "$proj" -c Release -o artifacts --no-build
           done
 
-      # Если хочешь ещё и samples билдить в CI — добавь этот шаг:
-      # - name: Build samples (non-locked)
-      #   run: |
-      #     dotnet restore samples
-      #     dotnet build samples -c Release --no-restore
+      - name: Build samples
+        run: |
+          set -euo pipefail
+          for proj in samples/*/*.csproj; do
+            echo "Restoring sample (locked) $proj"
+            dotnet restore "$proj" --locked-mode
+            echo "Building sample $proj"
+            dotnet build "$proj" -c Release --no-restore
+          done
 
       - name: Upload packages
         uses: actions/upload-artifact@v4

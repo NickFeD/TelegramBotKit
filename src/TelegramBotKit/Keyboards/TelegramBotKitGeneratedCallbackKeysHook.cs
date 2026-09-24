@@ -2,6 +2,10 @@
 
 namespace TelegramBotKit.Commands;
 
+/// <summary>
+/// Provides the integration point used by generated command-registration code to publish callback keys.
+/// Applications should not call this hook directly.
+/// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class TelegramBotKitGeneratedCallbackKeysHook
 {

@@ -24,8 +24,11 @@ Concrete handlers and middleware resolve from the update scope with their config
 
 ## Middleware
 
-Global middleware surrounds routing and fallback. Local middleware belongs only to its selected route and runs after successful extraction.
-First registered is outermost; `await next(ctx)` awaits downstream work and unwinds. Not invoking next short-circuits; exceptions propagate through both pipelines. Scope disposal occurs even when processing throws.
+Global `IUpdateMiddleware` receives `BotContext` and surrounds routing and fallback for every update type.
+Typed `IUpdateRouteMiddleware<TPayload>` receives `UpdateRouteContext<TPayload>`, belongs only to its selected route, and runs after successful payload extraction.
+The terminal `IUpdatePayloadHandler<TPayload>` is the final owner of that route and does not receive a `next` continuation.
+
+For both middleware façades, the first registered component is outermost; awaiting `next(context)` executes downstream work and then unwinds. Not invoking next short-circuits; exceptions propagate through both pipelines. Scope disposal occurs even when processing throws.
 There is no separate handler chain or Handled/Continue result.
 
 ## Default message route

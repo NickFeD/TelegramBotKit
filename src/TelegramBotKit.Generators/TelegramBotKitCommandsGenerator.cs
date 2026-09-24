@@ -11,6 +11,7 @@ using Microsoft.CodeAnalysis;
 
 namespace TelegramBotKit.Generators;
 
+/// <summary>Generates compile-time command registrations for attributed TelegramBotKit command types.</summary>
 [Generator]
 public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
 {
@@ -38,6 +39,8 @@ public sealed class TelegramBotKitCommandsGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>Registers the incremental pipeline that discovers commands and emits their DI registrar.</summary>
+    /// <param name="context">The Roslyn initialization context for this generator.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var model = context.CompilationProvider.Select(static (c, ct) => Collect(c, ct));
