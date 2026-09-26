@@ -2,6 +2,7 @@
   <Folder Name="/samples/">
     <Project Path="samples/TelegramBotKit.Sample.ConsolePolling/TelegramBotKit.Sample.ConsolePolling.csproj" Id="586e863b-354c-4709-8fd1-2262e08b373d" />
     <Project Path="samples/TelegramBotKit.Sample.MinimalPolling/TelegramBotKit.Sample.MinimalPolling.csproj" />
+    <Project Path="samples/TelegramBotKit.Sample.PhotoSelector/TelegramBotKit.Sample.PhotoSelector.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/TelegramBotKit.Generators/TelegramBotKit.Generators.csproj" />
@@ -13,6 +14,7 @@
     <File Path="Directory.Build.props" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TelegramBotKit.Sample.PhotoSelector.Tests/TelegramBotKit.Sample.PhotoSelector.Tests.csproj" />
     <Project Path="tests/TelegramBotKit.Tests/TelegramBotKit.Tests.csproj" />
   </Folder>
 </Solution>
