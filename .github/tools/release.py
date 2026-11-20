@@ -13,7 +13,8 @@ import zipfile
 
 VERSION = ET.parse("Directory.Build.props").findtext(".//Version")
 PROJECTS = sorted(Path("src").glob("*/*.csproj"))
-PACKAGES = {ET.parse(p).findtext(".//PackageId"): p for p in PROJECTS}
+PACKAGES = {ET.parse(p).findtext(".//PackageId"): p for p in PROJECTS
+            if ET.parse(p).findtext(".//IsPackable") != "false"}
 OUTPUT = Path("artifacts/packages")
 
 
@@ -65,6 +66,8 @@ def validate():
                 assert not metadata.findall(".//n:dependency", ns)
             else:
                 required |= {f"lib/net10.0/{package}.dll", f"lib/net10.0/{package}.xml"}
+                if package == "TelegramBotKit":
+                    required.add("analyzers/dotnet/cs/TelegramBotKit.Generators.dll")
             assert required <= names, (filename, required - names)
             for dependency in metadata.findall(".//n:dependency", ns):
                 if dependency.get("id") in PACKAGES:
@@ -102,9 +105,19 @@ def build():
     run("dotnet", "test", tests, "-c", "Release", "--no-restore")
     for project in samples:
         run("dotnet", "build", project, "-c", "Release", "--no-restore")
-    for project in PROJECTS:
+    for project in PACKAGES.values():
         run("dotnet", "pack", project, "-c", "Release", "--no-build", "-o", OUTPUT)
     validate()
+    # Use an isolated cache so an already-cached published Core cannot shadow
+    # the newly packed version. No separate Generators reference is permitted.
+    consumer = Path("tests/Packaging/Consumer/Consumer.csproj")
+    global_cache = Path(os.environ.get("NUGET_PACKAGES", Path.home() / ".nuget/packages"))
+    version_property = f"-p:TelegramBotKitValidationVersion={VERSION}"
+    for transitive in ("false", "true"):
+        mode = f"-p:UseTransitiveCore={transitive}"
+        run("dotnet", "restore", consumer, "--source", OUTPUT, "--source", global_cache,
+            "--packages", OUTPUT / "consumer-cache", version_property, mode, "-p:NuGetAudit=false")
+        run("dotnet", "run", "--project", consumer, "-c", "Release", "--no-restore", version_property, mode)
 
 
 if __name__ == "__main__":

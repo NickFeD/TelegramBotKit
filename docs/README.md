@@ -15,8 +15,10 @@ If you are new to TelegramBotKit, start with:
 ## Core topics
 
 - [Commands and routing](commands-and-routing.md) — commands, routing sugar, default handlers
+- [Generated commands](generated-commands.md) — bundled compiler, packaging and migration
 - [Middleware](middleware.md) — middleware pipeline and examples
-- [Hosting](hosting.md) — polling and update scheduling
+- [Hosting](hosting.md) — shared execution and polling
+- [Webhooks](webhooks.md) — ASP.NET Core, delivery contracts and polling migration
 - [Update routes](updates.md) — built-in/custom descriptors, local middleware and terminals
 - [Conversations](conversations.md) — `WaitForUserResponse` patterns and gotchas
 - [Messaging](messaging.md) — sending, editing, callbacks and the optional queue
@@ -28,8 +30,10 @@ If you are new to TelegramBotKit, start with:
 
 ## Project docs
 
+- [PhotoSelector sample](samples/photo-selector.md) — media browsing, selection and export
+- [Webhook sample](samples/webhook.md) — configuration and explicit webhook registration
+- [Benchmarks](benchmarks.md) — reproducible performance measurements and their limits
 - [Releasing](releasing.md) — publishing packages
-- [Roadmap](roadmap.md) — short roadmap
 
 ---
 

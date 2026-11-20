@@ -66,7 +66,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          python scripts/release.py check-version
+          python .github/tools/release.py check-version
           if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
             echo "Tag v$VERSION already exists. Choose a new version." >&2
             exit 1
@@ -81,10 +81,10 @@ jobs:
             **/packages.lock.json
 
       - name: Restore, build, test, build samples, pack and validate
-        run: python scripts/release.py build
+        run: python .github/tools/release.py build
 
       - name: Recheck version uniqueness before publication
-        run: python scripts/release.py check-version
+        run: python .github/tools/release.py check-version
 
       - name: Validate NuGet publish settings
         shell: bash

@@ -1,18 +1,18 @@
-# Hosting and polling
+# Shared hosting and polling
 
 ← [Docs index](README.md) · See also: [Processing pipeline](processing-pipeline.md)
 
-`TelegramBotKit.Hosting` provides polling integration (`GetUpdates`) and an update scheduler.
+`TelegramBotKit.Hosting` owns shared in-memory admission, actors, concurrency and execution lifetime. `TelegramBotKit.Polling` owns GetUpdates; `TelegramBotKit.Webhook.AspNetCore` adapts HTTP requests to the same receiver. See [webhooks and migration](webhooks.md).
 
 ## Enable polling
 
 ```csharp
-builder.Services.AddTelegramBotKitPolling();
+using TelegramBotKit.Polling;
 ```
 
 Polling options are available on `TelegramBotKitOptions.Polling`:
 
-- `MaxDegreeOfParallelism` — global concurrency.
+- `MaxDegreeOfParallelism` — legacy global concurrency fallback.
 - `Limit` — `GetUpdates` batch size.
 - `TimeoutSeconds` — `GetUpdates` long polling timeout.
 - `AllowedUpdates` — Telegram update types to request.
@@ -25,12 +25,21 @@ By default the scheduler processes updates on "actors" to reduce race conditions
 - Inline-query-like updates are keyed by **User**.
 - Callback queries are keyed by **User** (to avoid concurrent callbacks for the same user).
 
-This lets request/response flows (see `WaitForUserResponse`) work reliably while still enabling parallelism.
+This is the intended serialization policy. Built-in request/response flows also
+need the dedicated response scheduling path described below; actor keys alone
+do not establish that guarantee.
 
 Additional notes:
 
 - Some update types are **unkeyed** (for example, `UpdateType.Poll`). These are processed immediately and only respect the global DOP limit.
 - Idle actors are cleaned up after a short period of inactivity.
+
+Actor admission and idle retirement now share one synchronization gate. Polling
+shutdown cancels and awaits accepted update processing and workers before disposing
+the concurrency limiter. Cancellation is cooperative: handlers must observe their token.
+This remains in-memory execution, without a durable queue or an at-least-once
+delivery guarantee. See [webhook delivery contracts](webhooks.md) for admission,
+cancellation and transport migration details.
 
 ## WaitForUserResponse gotchas
 
@@ -44,9 +53,9 @@ See `./conversations.md` for recommended usage patterns.
 
 ## Global rate limiting
 
-Polling uses a global DOP limiter (`MaxDegreeOfParallelism`).
+Both transports use a shared global DOP limiter (`MaxDegreeOfParallelism`).
 
-- Set it to a lower value for stricter global concurrency.
+- Set it to a lower value for stricter legacy global concurrency fallback.
 - Set it to `0` to **remove the global limit** (unlimited concurrency; actors still serialize per key).
 
 ## Conversation response scheduling

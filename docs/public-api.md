@@ -19,6 +19,17 @@ Primary types:
 
 ## Global update pipeline
 
+`IUpdateDispatcher` is the public update-processing entry point. Core preserves
+an existing DI registration. Polling uses a singleton scheduler, so replacement
+dispatchers must have a compatible lifetime and observe update cancellation.
+
+`IScheduledUpdateDispatcher` is an optional public capability used alongside it.
+It receives the host's execution continuation, allowing normal work to use
+actor/DOP scheduling while active conversation responses can release a waiting
+command. Decorators must forward this capability when they need to preserve it.
+Completion covers the full update lifetime. See [Hosting](hosting.md) and
+[webhook delivery contracts](webhooks.md) for cancellation and shutdown behavior.
+
 `BotContext` contains the raw Telegram update, bot client, message sender,
 per-update service provider, cancellation token, and an `Items` dictionary.
 
@@ -87,9 +98,14 @@ typed buttons.
 
 ## Hosting
 
-The `TelegramBotKit.Hosting` package provides
-`AddTelegramBotKitPolling()` and hosted polling. Polling options control allowed
-updates, batch size, long-poll timeout, and concurrency.
+`TelegramBotKit.Hosting` provides `IUpdateReceiver`, `UpdateProcessingOptions`
+and `AddTelegramBotKitUpdateProcessing()`. Admission is distinct from processing;
+the default implementation uses in-memory queues and a shared host lifecycle.
+`TelegramBotKit.Polling` provides `AddTelegramBotKitPolling()` and GetUpdates.
+`TelegramBotKit.Webhook.AspNetCore` provides `AddTelegramBotKitWebhook()`,
+`MapTelegramBotKitWebhook()`, `SetTelegramBotKitWebhookAsync()` and
+`DeleteTelegramBotKitWebhookAsync()`. Remote management is explicit.
+See [webhooks](webhooks.md) for contracts and the breaking package migration.
 
 ## Optional Routing package
 
@@ -104,7 +120,8 @@ classes.
 - `WebhookOptions`
 - `UpdateDeliveryMode`
 
-Webhook-related option types do not imply completed webhook hosting support.
+Webhook reception is implemented by the optional ASP.NET Core package. These
+options alone do not enable reception; register and map the adapter explicitly.
 
 ## Exceptions
 
@@ -114,7 +131,12 @@ failure categories.
 
 ## Internal implementation
 
+Core also bundles the compile-time command generator. `AddCommands()` applies
+the existing generated registrations; explicit generic/fluent registration remains
+available. Generated hooks are compiler infrastructure, not
+application extension points. See [generated commands](generated-commands.md).
+
 `Pipeline<TContext>`, `PipelineDelegate<TContext>`, `IPipelineNode<TContext>`,
 `RouteRegistration<TPayload>`, and `UpdateHandlerRegistry` are implementation details.
 They are not public extension points. Applications extend the runtime through the
-public middleware, route, terminal, command, fallback, and messaging contracts above.
+public dispatcher, middleware, route, terminal, command, fallback, and messaging contracts above.
