@@ -5,7 +5,8 @@
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
 
-		<IsPackable>true</IsPackable>
+		<!-- Compiler infrastructure shipped inside Core. -->
+		<IsPackable>false</IsPackable>
 
 		<!-- Analyzer / Source Generator package -->
 		<PackageType>Analyzer</PackageType>

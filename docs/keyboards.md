@@ -50,6 +50,11 @@ await ctx.Sender.SendText(chatId, new SendText
 
 If you already have a raw callback string, use `Keyboard.CallbackRaw(text, data)`.
 
+`Keyboard.Callback<THandler>(text, args)` obtains its key from the callback
+attribute's generated resolver. Core bundles this generator; runtime attribute
+reflection is not used. Supply the key explicitly for handlers without a
+generated mapping. See [generated commands](generated-commands.md).
+
 ### URL and other inline buttons
 
 ```csharp

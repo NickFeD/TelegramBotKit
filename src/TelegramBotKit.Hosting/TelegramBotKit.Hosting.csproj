@@ -8,8 +8,8 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>TelegramBotKit.Hosting</PackageId>
-    <Description>Hosting and polling integration for TelegramBotKit.</Description>
-    <PackageTags>telegram;telegram-bot;bot;hosting;polling;dotnet</PackageTags>
+    <Description>Shared update admission, execution and host lifetime for TelegramBotKit transports.</Description>
+    <PackageTags>telegram;telegram-bot;bot;hosting;dotnet</PackageTags>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 

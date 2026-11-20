@@ -1,22 +1,25 @@
 namespace TelegramBotKit.Commands;
 
 /// <summary>
-/// Marks a text command.
+/// Declares exact text triggers used by the bundled generator to register an <see cref="ITextCommand"/>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class TextCommandAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of TextCommandAttribute.
+    /// Declares text triggers matched with ordinal, case-insensitive comparison.
     /// </summary>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
     public TextCommandAttribute(params string[] triggers)
         : this(ignoreCase: true, triggers)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of TextCommandAttribute.
+    /// Declares text triggers with an explicit ordinal case-comparison mode.
     /// </summary>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
     public TextCommandAttribute(bool ignoreCase, params string[] triggers)
     {
         if (triggers is null || triggers.Length == 0)
@@ -27,7 +30,7 @@ public sealed class TextCommandAttribute : Attribute
     }
 
     /// <summary>
-    /// Gets the triggers.
+    /// Gets the declared triggers, which are trimmed and deduplicated during registration.
     /// </summary>
     public IReadOnlyList<string> Triggers { get; }
     /// <summary>

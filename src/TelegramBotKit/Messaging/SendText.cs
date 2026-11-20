@@ -1,11 +1,11 @@
-﻿using Telegram.Bot.Types;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
 /// <summary>
-/// Provides a send text.
+/// Specifies text, formatting, keyboard and delivery options for a new Telegram message.
 /// </summary>
 public sealed record SendText
 {
@@ -16,37 +16,37 @@ public sealed record SendText
     public int? MessageThreadId { get; init; }
 
     /// <summary>
-    /// Gets or sets the text.
+    /// Gets the text supplied with this request.
     /// </summary>
     public required string Text { get; init; }
 
     /// <summary>
-    /// Gets or sets the parse mode.
+    /// Gets the text or caption parse mode. Defaults to no markup parsing.
     /// </summary>
     public ParseMode ParseMode { get; init; } = ParseMode.None;
 
     /// <summary>
-    /// Gets or sets the link preview options.
+    /// Gets optional link-preview settings for the message text.
     /// </summary>
     public LinkPreviewOptions? LinkPreviewOptions { get; init; }
 
     /// <summary>
-    /// Gets or sets the message entities.
+    /// Gets explicit formatting entities for the message text.
     /// </summary>
     public IEnumerable<MessageEntity>? Entities { get; init; }
 
     /// <summary>
-    /// Gets or sets the reply markup.
+    /// Gets the optional keyboard markup sent with this request.
     /// </summary>
     public ReplyMarkup? ReplyMarkup { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether notifications are disabled.
+    /// Gets the silent-delivery flag for the new message.
     /// </summary>
     public bool DisableNotification { get; init; } = false;
 
     /// <summary>
-    /// Gets or sets a value indicating whether content is protected.
+    /// Gets the content-protection flag for the new message.
     /// </summary>
     public bool ProtectContent { get; init; } = false;
 }

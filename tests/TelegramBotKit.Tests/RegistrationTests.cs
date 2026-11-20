@@ -13,6 +13,34 @@ namespace TelegramBotKit.Tests;
 
 public sealed class RegistrationTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Custom_dispatcher_registration_is_honored_before_or_after_core(bool beforeCore)
+    {
+        var services = new ServiceCollection();
+        var custom = new CustomDispatcher();
+        if (beforeCore) services.AddSingleton<IUpdateDispatcher>(custom);
+        Configure(services);
+        if (!beforeCore) services.AddSingleton<IUpdateDispatcher>(custom);
+        await using var provider = Build(services);
+        var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+        Assert.Same(custom, dispatcher);
+        var update = new Update { Id = 123 };
+        await dispatcher.DispatchAsync(update);
+        Assert.Same(update, custom.Received);
+    }
+
+    private sealed class CustomDispatcher : IUpdateDispatcher
+    {
+        internal Update? Received { get; private set; }
+        public Task DispatchAsync(Update update, CancellationToken ct = default)
+        {
+            Received = update;
+            return Task.CompletedTask;
+        }
+    }
+
     private static ServiceProvider Build(IServiceCollection services) => services.BuildServiceProvider(
         new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     private static TelegramBotKitBuilder Configure(IServiceCollection services)

@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using System.Net.Http;
-using System.Reflection;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -19,12 +18,17 @@ using TelegramBotKit.Routing;
 namespace TelegramBotKit.DependencyInjection;
 
 /// <summary>
-/// Provides a telegram bot kit service collection extensions.
+/// Registers Core services, generated or explicit commands, and optional queued messaging.
 /// </summary>
+/// <remarks>
+/// Core registration does not start polling or map a webhook endpoint; register a delivery adapter separately.
+/// Repeated AddTelegramBotKit calls reuse the builder and append options configuration. The first
+/// registration supplies the HTTP-client factory unless a Telegram client was already registered.
+/// </remarks>
 public static partial class TelegramBotKitServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds the telegram bot kit.
+    /// Registers Core dispatch, command routing, message sending and in-memory response waits.
     /// </summary>
     /// <param name="services">Service collection.</param>
     /// <param name="configure">Options configuration delegate.</param>
@@ -37,7 +41,7 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds the telegram bot kit using a custom <see cref="HttpClient"/>.
+    /// Registers Core services using the supplied <see cref="HttpClient"/> for Telegram requests.
     /// </summary>
     /// <param name="services">Service collection.</param>
     /// <param name="configure">Options configuration delegate.</param>
@@ -55,12 +59,12 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds the telegram bot kit using a custom <see cref="HttpClient"/> factory.
+    /// Registers Core services using a dependency-injection factory for the Telegram HTTP client.
     /// </summary>
     /// <param name="services">Service collection.</param>
     /// <param name="configure">Options configuration delegate.</param>
     /// <param name="httpClientFactory">
-    /// Factory used to resolve a custom <see cref="HttpClient"/> from the current <see cref="IServiceProvider"/>.
+    /// Factory invoked with the root service provider when the singleton Telegram client is created.
     /// If the factory returns <see langword="null"/>, the default <see cref="TelegramBotClient"/> constructor is used.
     /// </param>
     /// <returns>A <see cref="TelegramBotKitBuilder"/> instance for further configuration.</returns>
@@ -132,7 +136,7 @@ public static partial class TelegramBotKitServiceCollectionExtensions
             return reg;
         });
 
-        services.AddSingleton<IUpdateDispatcher, UpdateRouter>();
+        services.TryAddSingleton<IUpdateDispatcher, UpdateRouter>();
         services.AddSingleton(new TelegramBotKitRegistration(builder));
 
         return builder;
@@ -142,8 +146,11 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     private sealed record TelegramBotKitRegistration(TelegramBotKitBuilder Builder);
 
     /// <summary>
-    /// Adds the telegram bot kit queued message sender.
+    /// Replaces <see cref="IMessageSender"/> with an in-memory queue that applies delivery limits and retries.
     /// </summary>
+    /// <param name="services">The service collection receiving the registrations.</param>
+    /// <param name="configure">An optional delegate that configures queue capacity, throttling and retries.</param>
+    /// <returns>The same service collection for further configuration.</returns>
     public static IServiceCollection AddTelegramBotKitQueuedMessageSender(
         this IServiceCollection services,
         Action<QueuedMessageSenderOptions>? configure = null)
@@ -163,13 +170,14 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers a slash-message command (e.g. "/start") without assembly scanning (AOT-friendly).
+    /// Registers a slash-message command, such as <c>/start</c>, without assembly scanning.
     /// The command instance is resolved from the per-update scope (<see cref="BotContext.Services"/>).
     /// </summary>
     /// <typeparam name="TCommand">Concrete command type.</typeparam>
     /// <param name="services">Service collection.</param>
     /// <param name="command">Slash command string ("/start").</param>
     /// <param name="lifetime">DI lifetime for the command type. Defaults to <see cref="ServiceLifetime.Transient"/>.</param>
+    /// <returns>The same service collection for further configuration.</returns>
     public static IServiceCollection AddMessageCommand<TCommand>(
         this IServiceCollection services,
         string command,
@@ -195,7 +203,7 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers an exact text-trigger command without assembly scanning (AOT-friendly).
+    /// Registers an exact text-trigger command without assembly scanning.
     /// The command instance is resolved from the per-update scope (<see cref="BotContext.Services"/>).
     /// </summary>
     /// <typeparam name="TCommand">Concrete command type.</typeparam>
@@ -203,6 +211,7 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     /// <param name="triggers">Text triggers (exact match).</param>
     /// <param name="ignoreCase">Whether triggers should match ignoring case.</param>
     /// <param name="lifetime">DI lifetime for the command type. Defaults to <see cref="ServiceLifetime.Transient"/>.</param>
+    /// <returns>The same service collection for further configuration.</returns>
     public static IServiceCollection AddTextCommand<TCommand>(
         this IServiceCollection services,
         IReadOnlyList<string> triggers,
@@ -237,13 +246,14 @@ public static partial class TelegramBotKitServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers a callback command without assembly scanning (AOT-friendly).
+    /// Registers a callback command without assembly scanning.
     /// The command instance is resolved from the per-update scope (<see cref="BotContext.Services"/>).
     /// </summary>
     /// <typeparam name="TCommand">Concrete command type.</typeparam>
     /// <param name="services">Service collection.</param>
     /// <param name="key">Callback key.</param>
     /// <param name="lifetime">DI lifetime for the command type. Defaults to <see cref="ServiceLifetime.Transient"/>.</param>
+    /// <returns>The same service collection for further configuration.</returns>
     public static IServiceCollection AddCallbackCommand<TCommand>(
         this IServiceCollection services,
         string key,
@@ -268,137 +278,17 @@ public static partial class TelegramBotKitServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Registers all TelegramBotKit commands.
-    /// If generated registrations are available (TelegramBotKit.Generators installed), uses them.
-    /// Otherwise falls back to reflection-based discovery.
-    /// </summary>
-    /// <param name="services">Service collection.</param>
-    /// <param name="fallbackToReflection">
-    /// If false, throws when no generated registrations are present.
-    /// Use false for NativeAOT/trim-safe builds.
-    /// </param>
+    /// <summary>Registers attributed commands discovered by the bundled source generator.</summary>
+    /// <param name="services">Service collection receiving generated registrations.</param>
+    /// <param name="fallbackToReflection">Legacy compatibility flag. When false, missing generated registrations cause an error. Runtime reflection discovery is never performed.</param>
+    /// <returns>The same collection for continued configuration.</returns>
+    /// <remarks>Explicit generic and fluent registration remains available without discovery. Empty applications can keep the default call.</remarks>
+    /// <exception cref="InvalidOperationException">No generated registrar is available and <paramref name="fallbackToReflection"/> is false.</exception>
     public static IServiceCollection AddCommands(this IServiceCollection services, bool fallbackToReflection = true)
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        // 1) Prefer generated registrations (no reflection)
-        if (TelegramBotKitGeneratedCommandsHook.TryRun(services))
-            return services;
-
-        // 2) Fallback to reflection discovery
-        if (!fallbackToReflection)
-        {
-            throw new InvalidOperationException(
-                "No generated command registrations found. Install TelegramBotKit.Generators or enable reflection fallback.");
-        }
-
-        return AddCommandsByReflection(services);
-    }
-
-    private static IServiceCollection AddCommandsByReflection(IServiceCollection services)
-    {
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => a is not null && !a.IsDynamic)
-            .Where(ReferencesTelegramBotKit)
-            .ToArray();
-
-        foreach (var t in GetTypesWithCommandAttributes(assemblies))
-            AddCommandByType(services, t);
-
+        if (!TelegramBotKitGeneratedCommandsHook.TryRun(services) && !fallbackToReflection)
+            throw new InvalidOperationException("No generated command registrations found. Enable the generator bundled with TelegramBotKit, or register commands explicitly.");
         return services;
-    }
-
-    private static bool ReferencesTelegramBotKit(Assembly asm)
-    {
-        var name = asm.GetName().Name;
-        if (string.Equals(name, "TelegramBotKit", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        try
-        {
-            return asm.GetReferencedAssemblies()
-                .Any(r => string.Equals(r.Name, "TelegramBotKit", StringComparison.OrdinalIgnoreCase));
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static IEnumerable<Type> GetTypesWithCommandAttributes(params Assembly[] assemblies)
-    {
-        foreach (var asm in assemblies)
-        {
-            Type[] types;
-            try
-            {
-                types = asm.GetTypes();
-            }
-            catch (ReflectionTypeLoadException ex)
-            {
-                types = ex.Types.Where(t => t is not null).Cast<Type>().ToArray();
-            }
-
-            foreach (var t in types)
-            {
-                if (t is null) continue;
-                if (t.IsAbstract || t.IsInterface) continue;
-                if (!typeof(ICommand).IsAssignableFrom(t)) continue;
-
-                var hasRoleAttr =
-                    t.GetCustomAttributes(typeof(MessageCommandAttribute), inherit: false).Length > 0
-                    || t.GetCustomAttributes(typeof(TextCommandAttribute), inherit: false).Length > 0
-                    || t.GetCustomAttributes(typeof(CallbackCommandAttribute), inherit: false).Length > 0;
-
-                if (hasRoleAttr)
-                    yield return t;
-            }
-        }
-    }
-
-    private static void AddCommandByType(
-        IServiceCollection services,
-        Type commandType,
-        ServiceLifetime lifetime = ServiceLifetime.Transient)
-    {
-        services.Add(new ServiceDescriptor(commandType, commandType, lifetime));
-
-        var msgAttr = commandType.GetCustomAttribute<MessageCommandAttribute>();
-        if (msgAttr is not null && typeof(IMessageCommand).IsAssignableFrom(commandType))
-        {
-            services.AddSingleton(new MessageCommandDescriptor(
-                msgAttr.Command,
-                (message, ctx) =>
-                {
-                    var handler = (IMessageCommand)ctx.Services.GetRequiredService(commandType);
-                    return new ValueTask(handler.HandleAsync(message, ctx));
-                }));
-        }
-
-        var textAttr = commandType.GetCustomAttribute<TextCommandAttribute>();
-        if (textAttr is not null && typeof(ITextCommand).IsAssignableFrom(commandType))
-        {
-            services.AddSingleton(new TextCommandDescriptor(
-                textAttr.Triggers,
-                textAttr.IgnoreCase,
-                (message, ctx) =>
-                {
-                    var handler = (ITextCommand)ctx.Services.GetRequiredService(commandType);
-                    return new ValueTask(handler.HandleAsync(message, ctx));
-                }));
-        }
-
-        var cbAttr = commandType.GetCustomAttribute<CallbackCommandAttribute>();
-        if (cbAttr is not null && typeof(ICallbackCommand).IsAssignableFrom(commandType))
-        {
-            services.AddSingleton(new CallbackCommandDescriptor(
-                cbAttr.Key,
-                (query, args, ctx) =>
-                {
-                    var handler = (ICallbackCommand)ctx.Services.GetRequiredService(commandType);
-                    return new ValueTask(handler.HandleAsync(query, args, ctx));
-                }));
-        }
     }
 }

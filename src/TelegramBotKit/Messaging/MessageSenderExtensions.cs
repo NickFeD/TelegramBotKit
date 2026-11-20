@@ -4,48 +4,65 @@ using Telegram.Bot.Types.ReplyMarkups;
 namespace TelegramBotKit.Messaging;
 
 /// <summary>
-/// Opt-in convenience overloads for <see cref="IMessageSender"/> that derive chat/message identifiers
-/// from Telegram payload types (<see cref="Message"/>, <see cref="CallbackQuery"/>).
-/// 
-/// Design goals:
-/// - predictable (no Update-type guessing)
-/// - minimal logic (only direct field extraction)
-/// - safe for future update types (user can always call base API with explicit ids)
+/// Derives chat, message and thread identifiers from messages and callback queries for <see cref="IMessageSender"/>.
 /// </summary>
+/// <remarks>
+/// Message-based sends inherit the source thread unless the request overrides it.
+/// Operations requiring a chat message reject inline callbacks; Try-prefixed overloads
+/// return false when the callback has no message. Await the returned task to observe request failure.
+/// </remarks>
 public static class MessageSenderExtensions
 {
     extension(IMessageSender sender)
     {
-        // -------------------------
-        // Message-based
-        // -------------------------
 
         /// <summary>Send text to the same chat and, unless explicitly overridden, thread as <paramref name="message"/>.</summary>
+        /// <param name="message">The Telegram message to process or use as the operation's target.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the message sent by Telegram.</returns>
         public Task<Message> SendText(Message message, SendText msg, CancellationToken ct = default)
             => sender.SendText(message.Chat.Id, msg with { MessageThreadId = msg.MessageThreadId ?? message.MessageThreadId }, ct);
 
         /// <summary>Send photo to the same chat and, unless explicitly overridden, thread as <paramref name="message"/>.</summary>
+        /// <param name="message">The Telegram message to process or use as the operation's target.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the message sent by Telegram.</returns>
         public Task<Message> SendPhoto(Message message, SendPhoto msg, CancellationToken ct = default)
             => sender.SendPhoto(message.Chat.Id, msg with { MessageThreadId = msg.MessageThreadId ?? message.MessageThreadId }, ct);
 
         /// <summary>Edit the given <paramref name="message"/> text (by chatId + messageId).</summary>
+        /// <param name="message">The Telegram message to process or use as the operation's target.</param>
+        /// <param name="edit">The replacement message content and formatting options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the edited Telegram message.</returns>
         public Task<Message> EditText(Message message, EditText edit, CancellationToken ct = default)
             => sender.EditText(message.Chat.Id, message.Id, edit, ct);
 
         /// <summary>Edit reply markup of the given <paramref name="message"/> (by chatId + messageId).</summary>
+        /// <param name="message">The Telegram message to process or use as the operation's target.</param>
+        /// <param name="keyboard">The replacement inline keyboard, or null to remove it.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>The asynchronous operation, which completes after processing finishes.</returns>
         public Task EditReplyMarkup(Message message, InlineKeyboardMarkup? keyboard, CancellationToken ct = default)
             => sender.EditReplyMarkup(message.Chat.Id, message.Id, keyboard, ct);
 
         /// <summary>Edit the given <paramref name="message"/> photo/media (by chatId + messageId).</summary>
+        /// <param name="message">The Telegram message to process or use as the operation's target.</param>
+        /// <param name="edit">The replacement message content and formatting options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>The asynchronous operation, which completes after processing finishes.</returns>
         public Task EditPhoto(Message message, EditPhoto edit, CancellationToken ct = default)
             => sender.EditPhoto(message.Chat.Id, message.Id, edit, ct);
 
 
-        // -------------------------
-        // CallbackQuery-based
-        // -------------------------
 
         /// <summary>Answer a callback query.</summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="answer">The callback notification text, alert and optional URL.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>The asynchronous operation, which completes after processing finishes.</returns>
         public Task AnswerCallback(CallbackQuery callback, AnswerCallback answer, CancellationToken ct = default)
             => sender.AnswerCallback(callback.Id, answer, ct);
 
@@ -53,6 +70,10 @@ public static class MessageSenderExtensions
         /// Send text to the chat and, unless explicitly overridden, thread where the callback originated.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the message sent by Telegram.</returns>
         public Task<Message> SendText(CallbackQuery callback, SendText msg, CancellationToken ct = default)
             => sender.SendText(RequireCallbackMessage(callback), msg, ct);
 
@@ -60,6 +81,10 @@ public static class MessageSenderExtensions
         /// Send a photo to the callback message's chat and, unless explicitly overridden, thread.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the message sent by Telegram.</returns>
         public Task<Message> SendPhoto(CallbackQuery callback, SendPhoto msg, CancellationToken ct = default)
             => sender.SendPhoto(RequireCallbackMessage(callback), msg, ct);
 
@@ -67,10 +92,19 @@ public static class MessageSenderExtensions
         /// Reply with a photo to the callback message, inheriting its thread unless explicitly overridden.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the message sent by Telegram.</returns>
         public Task<Message> ReplyPhoto(CallbackQuery callback, SendPhoto msg, CancellationToken ct = default)
             => sender.ReplyPhoto(RequireCallbackMessage(callback), msg, ct);
 
         /// <summary>Try to send a photo in the callback message's chat and thread. Returns false and a null task for inline callbacks.</summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="task">The started operation, or null when the callback has no message. Await it to observe completion or failure.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>True if an operation was created; false if the callback contains no message. This does not indicate request success.</returns>
         public bool TrySendPhoto(CallbackQuery callback, SendPhoto msg, out Task<Message>? task, CancellationToken ct = default)
         {
             task = callback.Message is { } message ? sender.SendPhoto(message, msg, ct) : null;
@@ -78,6 +112,11 @@ public static class MessageSenderExtensions
         }
 
         /// <summary>Try to reply with a photo, inheriting the callback message's thread. Returns false and a null task for inline callbacks.</summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="task">The started operation, or null when the callback has no message. Await it to observe completion or failure.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>True if an operation was created; false if the callback contains no message. This does not indicate request success.</returns>
         public bool TryReplyPhoto(CallbackQuery callback, SendPhoto msg, out Task<Message>? task, CancellationToken ct = default)
         {
             task = callback.Message is { } message ? sender.ReplyPhoto(message, msg, ct) : null;
@@ -88,6 +127,10 @@ public static class MessageSenderExtensions
         /// Reply to the message from which the callback originated.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="msg">The outgoing message content and delivery options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the message sent by Telegram.</returns>
         public Task<Message> ReplyText(CallbackQuery callback, SendText msg, CancellationToken ct = default)
             => sender.ReplyText(RequireCallbackMessage(callback), msg, ct);
 
@@ -95,6 +138,10 @@ public static class MessageSenderExtensions
         /// Edit text of the message from which the callback originated.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="edit">The replacement message content and formatting options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>A task returning the edited Telegram message.</returns>
         public Task<Message> EditText(CallbackQuery callback, EditText edit, CancellationToken ct = default)
         {
             var m = RequireCallbackMessage(callback);
@@ -105,6 +152,10 @@ public static class MessageSenderExtensions
         /// Edit reply markup of the message from which the callback originated.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="keyboard">The replacement inline keyboard, or null to remove it.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>The asynchronous operation, which completes after processing finishes.</returns>
         public Task EditReplyMarkup(CallbackQuery callback, InlineKeyboardMarkup? keyboard, CancellationToken ct = default)
         {
             var m = RequireCallbackMessage(callback);
@@ -115,6 +166,10 @@ public static class MessageSenderExtensions
         /// Edit photo/media of the message from which the callback originated.
         /// Throws when <see cref="CallbackQuery.Message"/> is null (inline callbacks).
         /// </summary>
+        /// <param name="callback">The incoming callback query.</param>
+        /// <param name="edit">The replacement message content and formatting options.</param>
+        /// <param name="ct">The token used to cancel the operation.</param>
+        /// <returns>The asynchronous operation, which completes after processing finishes.</returns>
         public Task EditPhoto(CallbackQuery callback, EditPhoto edit, CancellationToken ct = default)
         {
             var m = RequireCallbackMessage(callback);
@@ -228,13 +283,13 @@ public static class MessageSenderExtensions
     }
 
 
-    // -------------------------
-    // Try* variants for inline safety
-    // -------------------------
 
     /// <summary>
     /// Try to get the message from a callback query. Returns false for inline callbacks.
     /// </summary>
+    /// <param name="callback">The incoming callback query.</param>
+    /// <param name="message">The callback's message, or null when this method returns false.</param>
+    /// <returns>True if the callback contains a message; false for an inline callback.</returns>
     public static bool TryGetMessage(this CallbackQuery callback, out Message message)
     {
         message = callback.Message!;
@@ -245,8 +300,7 @@ public static class MessageSenderExtensions
     {
         if (callback is null) throw new ArgumentNullException(nameof(callback));
 
-        // Inline callbacks have Message == null. This library's IMessageSender currently
-        // supports editing by (chatId, messageId) only, so we fail fast and loudly.
+        // Inline callbacks have no chat message; these helpers require chat and message identifiers.
         return callback.Message ?? throw new NotSupportedException(
             "CallbackQuery.Message is null (inline callback). " +
             "This operation requires a message in a chat (chatId + messageId)." );

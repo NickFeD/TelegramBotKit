@@ -1,6 +1,6 @@
 # TelegramBotKit
 
-TelegramBotKit is a .NET 10 toolkit for building Telegram bots with polling hosting,
+TelegramBotKit is a .NET 10 toolkit for building Telegram bots with polling or ASP.NET Core webhooks,
 commands, strongly typed update routes, and nested middleware.
 
 Its core features include:
@@ -13,7 +13,7 @@ Its core features include:
 - simple request/response conversations;
 - messaging and keyboard helpers;
 - an optional queued sender;
-- an optional command source generator;
+- command discovery generated at compile time and bundled with Core;
 - custom descriptors for future Telegram update types.
 
 See the [documentation index](docs/README.md) for feature guides and the
@@ -22,16 +22,21 @@ See the [documentation index](docs/README.md) for feature guides and the
 ## Packages
 
 - `TelegramBotKit` — core configuration, commands, routes, middleware, and messaging.
-- `TelegramBotKit.Hosting` — polling and hosted-service integration.
+- `TelegramBotKit.Hosting` — shared admission, scheduling and execution lifetime.
 - `TelegramBotKit.Routing` — optional delegate-based command registration.
-- `TelegramBotKit.Generators` — optional compile-time command discovery.
+- `TelegramBotKit.Polling` — long polling through the shared receiver.
+- `TelegramBotKit.Webhook.AspNetCore` — ASP.NET Core webhook adapter.
+
+Core bundles the command generator; no separate Generators package is needed.
+The generator project remains compiler infrastructure in this repository. See
+[generated commands](docs/generated-commands.md) for packaging and migration.
 
 ## Minimal polling bot
 
 ```csharp
 using Microsoft.Extensions.Hosting;
 using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Hosting;
+using TelegramBotKit.Polling;
 
 var builder = Host.CreateApplicationBuilder(args);
 

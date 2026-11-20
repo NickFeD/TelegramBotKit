@@ -7,12 +7,17 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.3" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <ProjectReference Include="../../src/TelegramBotKit.Generators/TelegramBotKit.Generators.csproj" />
+    <ProjectReference Include="../../src/TelegramBotKit.Routing/TelegramBotKit.Routing.csproj" />
     <ProjectReference Include="../../src/TelegramBotKit/TelegramBotKit.csproj" />
     <ProjectReference Include="../../src/TelegramBotKit.Hosting/TelegramBotKit.Hosting.csproj" />
+    <ProjectReference Include="../../src/TelegramBotKit.Polling/TelegramBotKit.Polling.csproj" />
+    <ProjectReference Include="../../src/TelegramBotKit.Webhook.AspNetCore/TelegramBotKit.Webhook.AspNetCore.csproj" />
   </ItemGroup>
 </Project>

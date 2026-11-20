@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Telegram.Bot": {
+        "type": "Transitive",
+        "resolved": "22.9.0",
+        "contentHash": "h8PjZYkWm5vxoiGU3tlHUrEY1llhbyCMqibBiOWDaH8yW/1F3qwJjUhDaBPzmA3PcYVnFgnrx5b6fiRp8lGLEg=="
+      },
+      "telegrambotkit": {
+        "type": "Project",
+        "dependencies": {
+          "Telegram.Bot": "[22.9.0, )"
+        }
+      },
+      "telegrambotkit.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "TelegramBotKit": "[0.4.0-preview.1, )"
+        }
+      },
+      "telegrambotkit.webhook.aspnetcore": {
+        "type": "Project",
+        "dependencies": {
+          "TelegramBotKit.Hosting": "[0.4.0-preview.1, )"
+        }
+      }
+    }
+  }
+}

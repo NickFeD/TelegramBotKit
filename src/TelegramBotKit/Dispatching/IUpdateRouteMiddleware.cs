@@ -12,5 +12,6 @@ public interface IUpdateRouteMiddleware<TPayload> where TPayload : class
     /// </summary>
     /// <param name="context">The route context containing the selected payload.</param>
     /// <param name="next">The continuation for the remaining route middleware and terminal.</param>
+    /// <returns>The asynchronous operation, which completes after processing finishes.</returns>
     Task InvokeAsync(UpdateRouteContext<TPayload> context, UpdateRouteDelegate<TPayload> next);
 }

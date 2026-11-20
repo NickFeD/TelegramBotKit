@@ -10,7 +10,7 @@ This guide builds the smallest polling bot with one `/start` command.
 dotnet new console -n MyBot -f net10.0
 cd MyBot
 dotnet add package TelegramBotKit
-dotnet add package TelegramBotKit.Hosting
+dotnet add package TelegramBotKit.Polling
 ```
 
 `TelegramBotKit.Generators` is optional. Without it, `AddCommands()` discovers
@@ -46,7 +46,7 @@ Replace `Program.cs` with:
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using TelegramBotKit.DependencyInjection;
-using TelegramBotKit.Hosting;
+using TelegramBotKit.Polling;
 
 var builder = Host.CreateApplicationBuilder(args);
 

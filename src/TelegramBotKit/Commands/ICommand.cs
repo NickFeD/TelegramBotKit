@@ -1,7 +1,7 @@
 ﻿namespace TelegramBotKit.Commands;
 
 /// <summary>
-/// Defines the contract for a command.
+/// Marks handler types supported by the command registration system.
 /// </summary>
 public interface ICommand
 {

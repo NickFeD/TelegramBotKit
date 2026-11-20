@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBotKit.Commands;
@@ -6,46 +6,69 @@ using TelegramBotKit.Commands;
 namespace TelegramBotKit.Keyboards;
 
 /// <summary>
-/// Provides a keyboard.
+/// Builds Telegram inline and reply keyboards and validates callback payloads.
 /// </summary>
 public static partial class Keyboard
 {
     private const int MaxCallbackDataBytes = 64;
 
     /// <summary>
-    /// Creates the callback button.
+    /// Creates a callback button by packing a routing key and its arguments into callback data.
     /// </summary>
+    /// <exception cref="TelegramBotKitCallbackDataException">The key or arguments are invalid, or the packed data exceeds 64 UTF-8 bytes.</exception>
+    /// <param name="text">The button label displayed to the user.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="args">Space-separated callback arguments; blank entries are omitted and embedded spaces are rejected.</param>
+    /// <returns>An inline button containing the validated callback key and arguments.</returns>
     public static InlineKeyboardButton Callback(string text, string key, params string[] args)
         => InlineKeyboardButton.WithCallbackData(text, PackCallbackData(key, args));
 
     /// <summary>
-    /// Creates the callback button.
+    /// Creates a callback button using the handler's compiler-generated callback key.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The handler has no generated callback-key mapping.</exception>
+    /// <exception cref="TelegramBotKitCallbackDataException">The key or arguments are invalid, or the packed data exceeds 64 UTF-8 bytes.</exception>
+    /// <param name="text">The button label displayed to the user.</param>
+    /// <param name="args">Space-separated callback arguments; blank entries are omitted and embedded spaces are rejected.</param>
+    /// <typeparam name="THandler">The callback handler with a generated key mapping.</typeparam>
+    /// <returns>An inline button containing the validated callback key and arguments.</returns>
     public static InlineKeyboardButton Callback<THandler>(string text, params string[] args)
     where THandler : ICallbackCommand
     => Callback(text, CallbackCommandKeyResolver.GetKey<THandler>(), args);
 
     /// <summary>
-    /// Creates the callback raw button.
+    /// Creates a callback button from raw data, validating that it occupies at most 64 UTF-8 bytes.
     /// </summary>
+    /// <exception cref="TelegramBotKitCallbackDataException">The data is blank or exceeds 64 UTF-8 bytes.</exception>
+    /// <param name="text">The button label displayed to the user.</param>
+    /// <param name="data">The nonempty raw callback data, limited to 64 UTF-8 bytes.</param>
+    /// <returns>An inline button containing the validated raw callback data.</returns>
     public static InlineKeyboardButton CallbackRaw(string text, string data)
         => InlineKeyboardButton.WithCallbackData(text, ValidateCallbackData(data));
 
     /// <summary>
-    /// Creates the url button.
+    /// Creates an inline button that opens a URL.
     /// </summary>
+    /// <param name="text">The button label displayed to the user.</param>
+    /// <param name="url">The URL opened when the button is pressed.</param>
+    /// <returns>An inline button that opens the supplied URL.</returns>
     public static InlineKeyboardButton Url(string text, string url)
         => InlineKeyboardButton.WithUrl(text, url);
 
     /// <summary>
-    /// Creates the switch inline button.
+    /// Creates a button that starts an inline query in the current chat.
     /// </summary>
+    /// <param name="text">The button label displayed to the user.</param>
+    /// <param name="query">The initial inline query inserted in the current chat.</param>
+    /// <returns>An inline button that inserts the supplied query in the current chat.</returns>
     public static InlineKeyboardButton SwitchInline(string text, string query)
         => InlineKeyboardButton.WithSwitchInlineQueryCurrentChat(text, query);
 
     /// <summary>
-    /// Creates the inline button.
+    /// Materializes an inline keyboard, omitting null buttons and empty rows.
     /// </summary>
+    /// <param name="rows">The keyboard rows; null rows, null buttons and empty rows are omitted.</param>
+    /// <returns>The materialized inline keyboard; it may contain no rows.</returns>
     public static InlineKeyboardMarkup Inline(IEnumerable<IEnumerable<InlineKeyboardButton>> rows)
     {
         if (rows is null) throw new ArgumentNullException(nameof(rows));
@@ -107,8 +130,10 @@ public static partial class Keyboard
     }
 
     /// <summary>
-    /// Creates the row.
+    /// Groups inline buttons into a row without copying or filtering the supplied array.
     /// </summary>
+    /// <param name="buttons">The row's buttons, or null for an empty row.</param>
+    /// <returns>The supplied button array as a row, or an empty row when the array is null.</returns>
     public static IReadOnlyList<InlineKeyboardButton> Row(params InlineKeyboardButton[] buttons)
         => buttons ?? Array.Empty<InlineKeyboardButton>();
 

@@ -8,10 +8,12 @@ using TelegramBotKit.DependencyInjection;
 namespace TelegramBotKit.Routing;
 
 /// <summary>
-/// Adds ASP.NET-style <c>Use*</c> sugar for simple command routing.
-/// <para/>
-/// This package is optional and keeps TelegramBotKit core focused on extensibility and performance.
+/// Registers slash, text and callback commands as delegates on a bot builder.
 /// </summary>
+/// <remarks>
+/// Handler services come from the current update scope. Text helpers default to case-sensitive
+/// ordinal matching; attribute-based and explicit generic text registration default to ignoring case.
+/// </remarks>
 public static class TelegramBotKitRoutingExtensions
 {
     // ------------------------------
@@ -31,7 +33,11 @@ public static class TelegramBotKitRoutingExtensions
         Func<Message, BotContext, ValueTask> handler)
         => AddMessageCommand(builder, command, (MessageCommandInvoker)((m, ctx) => handler(m, ctx)));
 
-    /// <inheritdoc />
+    /// <summary>Registers a slash-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="command">The slash-command key, with or without a leading slash.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseMessageCommand(
         this TelegramBotKitBuilder builder,
         string command,
@@ -51,7 +57,11 @@ public static class TelegramBotKitRoutingExtensions
         Func<Message, BotContext, IServiceProvider, ValueTask> handler)
         => UseMessageCommand(builder, command, (m, ctx) => handler(m, ctx, ctx.Services));
 
-    /// <inheritdoc />
+    /// <summary>Registers a slash-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="command">The slash-command key, with or without a leading slash.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseMessageCommand(
         this TelegramBotKitBuilder builder,
         string command,
@@ -61,6 +71,11 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Convenience overload: resolves <typeparamref name="TService"/> from the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="command">The slash-command key, with or without a leading slash.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseMessageCommand<TService>(
         this TelegramBotKitBuilder builder,
         string command,
@@ -68,7 +83,12 @@ public static class TelegramBotKitRoutingExtensions
         where TService : notnull
         => UseMessageCommand(builder, command, (m, ctx) => handler(m, ctx, ctx.Services.GetRequiredService<TService>()));
 
-    /// <inheritdoc />
+    /// <summary>Registers a slash-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="command">The slash-command key, with or without a leading slash.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseMessageCommand<TService>(
         this TelegramBotKitBuilder builder,
         string command,
@@ -83,6 +103,11 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Registers an exact text-trigger handler.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="trigger">The text trigger matched against the trimmed message text.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         string trigger,
@@ -93,6 +118,11 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Registers an exact text-trigger handler and provides access to the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="trigger">The text trigger matched against the trimmed message text.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         string trigger,
@@ -100,7 +130,12 @@ public static class TelegramBotKitRoutingExtensions
         bool ignoreCase = false)
         => UseTextCommand(builder, new[] { trigger }, handler, ignoreCase);
 
-    /// <inheritdoc />
+    /// <summary>Registers a delegate for exact text triggers.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="trigger">The text trigger matched against the trimmed message text.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         string trigger,
@@ -108,7 +143,12 @@ public static class TelegramBotKitRoutingExtensions
         bool ignoreCase = false)
         => UseTextCommand(builder, trigger, (m, ctx, sp) => new ValueTask(handler(m, ctx, sp)), ignoreCase);
 
-    /// <inheritdoc />
+    /// <summary>Registers a delegate for exact text triggers.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="trigger">The text trigger matched against the trimmed message text.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         string trigger,
@@ -119,6 +159,11 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Registers a multi-trigger text handler.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         IReadOnlyList<string> triggers,
@@ -126,7 +171,12 @@ public static class TelegramBotKitRoutingExtensions
         bool ignoreCase = false)
         => AddTextCommand(builder, triggers, ignoreCase, (TextCommandInvoker)((m, ctx) => handler(m, ctx)));
 
-    /// <inheritdoc />
+    /// <summary>Registers a delegate for exact text triggers.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         IReadOnlyList<string> triggers,
@@ -137,6 +187,11 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Registers a text handler and provides access to the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         IReadOnlyList<string> triggers,
@@ -144,7 +199,12 @@ public static class TelegramBotKitRoutingExtensions
         bool ignoreCase = false)
         => UseTextCommand(builder, triggers, (m, ctx) => handler(m, ctx, ctx.Services), ignoreCase);
 
-    /// <inheritdoc />
+    /// <summary>Registers a delegate for exact text triggers.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand(
         this TelegramBotKitBuilder builder,
         IReadOnlyList<string> triggers,
@@ -155,6 +215,12 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Convenience overload: resolves <typeparamref name="TService"/> from the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand<TService>(
         this TelegramBotKitBuilder builder,
         IReadOnlyList<string> triggers,
@@ -166,6 +232,12 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Convenience overload: resolves <typeparamref name="TService"/> from the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="trigger">The text trigger matched against the trimmed message text.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand<TService>(
         this TelegramBotKitBuilder builder,
         string trigger,
@@ -174,7 +246,13 @@ public static class TelegramBotKitRoutingExtensions
         where TService : notnull
         => UseTextCommand<TService>(builder, new[] { trigger }, handler, ignoreCase);
 
-    /// <inheritdoc />
+    /// <summary>Registers a delegate for exact text triggers.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="trigger">The text trigger matched against the trimmed message text.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand<TService>(
         this TelegramBotKitBuilder builder,
         string trigger,
@@ -183,7 +261,13 @@ public static class TelegramBotKitRoutingExtensions
         where TService : notnull
         => UseTextCommand<TService>(builder, trigger, (m, ctx, s) => new ValueTask(handler(m, ctx, s)), ignoreCase);
 
-    /// <inheritdoc />
+    /// <summary>Registers a delegate for exact text triggers.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="triggers">The text triggers; registration trims values and removes empty or duplicate entries.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <param name="ignoreCase">Whether text matching ignores case using ordinal comparison.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseTextCommand<TService>(
         this TelegramBotKitBuilder builder,
         IReadOnlyList<string> triggers,
@@ -201,13 +285,21 @@ public static class TelegramBotKitRoutingExtensions
     /// <para/>
     /// The core router expects <c>callback_data</c> in the form: <c>"{key} {arg1} {arg2} ..."</c>.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand(
         this TelegramBotKitBuilder builder,
         string key,
         Func<CallbackQuery, string[], BotContext, ValueTask> handler)
         => AddCallbackCommand(builder, key, (CallbackCommandInvoker)((q, args, ctx) => handler(q, args, ctx)));
 
-    /// <inheritdoc />
+    /// <summary>Registers a callback-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand(
         this TelegramBotKitBuilder builder,
         string key,
@@ -217,13 +309,21 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Registers a callback command handler and provides access to the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand(
         this TelegramBotKitBuilder builder,
         string key,
         Func<CallbackQuery, string[], BotContext, IServiceProvider, ValueTask> handler)
         => UseCallbackCommand(builder, key, (q, args, ctx) => handler(q, args, ctx, ctx.Services));
 
-    /// <inheritdoc />
+    /// <summary>Registers a callback-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand(
         this TelegramBotKitBuilder builder,
         string key,
@@ -233,6 +333,11 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Convenience overload: resolves <typeparamref name="TService"/> from the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand<TService>(
         this TelegramBotKitBuilder builder,
         string key,
@@ -240,7 +345,12 @@ public static class TelegramBotKitRoutingExtensions
         where TService : notnull
         => UseCallbackCommand(builder, key, (q, args, ctx) => handler(q, args, ctx, ctx.Services.GetRequiredService<TService>()));
 
-    /// <inheritdoc />
+    /// <summary>Registers a callback-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand<TService>(
         this TelegramBotKitBuilder builder,
         string key,
@@ -251,6 +361,10 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Registers a callback command handler without args.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand(
         this TelegramBotKitBuilder builder,
         string key,
@@ -260,6 +374,11 @@ public static class TelegramBotKitRoutingExtensions
     /// <summary>
     /// Convenience overload: callback without args that resolves <typeparamref name="TService"/> from the per-update DI scope.
     /// </summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand<TService>(
         this TelegramBotKitBuilder builder,
         string key,
@@ -267,7 +386,12 @@ public static class TelegramBotKitRoutingExtensions
         where TService : notnull
         => UseCallbackCommand<TService>(builder, key, (q, _, ctx, s) => handler(q, ctx, s));
 
-    /// <inheritdoc />
+    /// <summary>Registers a callback-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <typeparam name="TService">The service type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand<TService>(
         this TelegramBotKitBuilder builder,
         string key,
@@ -275,7 +399,11 @@ public static class TelegramBotKitRoutingExtensions
         where TService : notnull
         => UseCallbackCommand<TService>(builder, key, (q, ctx, s) => new ValueTask(handler(q, ctx, s)));
 
-    /// <inheritdoc />
+    /// <summary>Registers a callback-command delegate.</summary>
+    /// <param name="builder">The bot builder being configured.</param>
+    /// <param name="key">The callback routing key. It must be nonempty and contain no spaces.</param>
+    /// <param name="handler">The handler invoked for a matching command; services are resolved from the current update scope.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public static TelegramBotKitBuilder UseCallbackCommand(
         this TelegramBotKitBuilder builder,
         string key,

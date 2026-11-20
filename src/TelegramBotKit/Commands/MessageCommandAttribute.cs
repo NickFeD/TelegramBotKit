@@ -1,14 +1,15 @@
 namespace TelegramBotKit.Commands;
 
 /// <summary>
-/// Marks a message command.
+/// Declares the slash-command key used by the bundled generator to register an <see cref="IMessageCommand"/>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class MessageCommandAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of MessageCommandAttribute.
+    /// Declares a slash-command key for the attributed handler.
     /// </summary>
+    /// <param name="command">The slash-command key, with or without a leading slash.</param>
     public MessageCommandAttribute(string command)
     {
         if (string.IsNullOrWhiteSpace(command))
@@ -18,7 +19,7 @@ public sealed class MessageCommandAttribute : Attribute
     }
 
     /// <summary>
-    /// Gets the command.
+    /// Gets the declared command key before registration normalizes its leading slash and bot suffix.
     /// </summary>
     public string Command { get; }
 }

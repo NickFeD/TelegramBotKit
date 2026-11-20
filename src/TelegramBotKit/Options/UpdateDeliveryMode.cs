@@ -6,11 +6,11 @@
 public enum UpdateDeliveryMode
 {
     /// <summary>
-    /// Represents the polling value.
+    /// Receives updates through Telegram GetUpdates using the Polling adapter.
     /// </summary>
     Polling = 0,
     /// <summary>
-    /// Represents the webhook value.
+    /// Receives updates through an HTTP webhook adapter.
     /// </summary>
     Webhook = 1
 }

@@ -3,8 +3,10 @@ namespace TelegramBotKit.Middleware;
 using TelegramBotKit.Pipelines;
 
 /// <summary>
-/// Provides a bot context delegate.
+/// Continues global middleware processing with the supplied update context.
 /// </summary>
+/// <param name="ctx">The current update context, including scoped services and cancellation.</param>
+/// <returns>The asynchronous operation, which completes after processing finishes.</returns>
 public delegate Task BotContextDelegate(BotContext ctx);
 
 internal sealed class MiddlewarePipeline

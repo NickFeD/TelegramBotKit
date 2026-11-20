@@ -1,28 +1,29 @@
-﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using TelegramBotKit.Options;
+using TelegramBotKit.Hosting;
 
-namespace TelegramBotKit.Hosting;
+namespace TelegramBotKit.Polling;
 
 internal sealed class PollingHostedService : BackgroundService
 {
     private readonly ITelegramBotClient _bot;
-    private readonly UpdateActorScheduler _scheduler;
+    private readonly IUpdateReceiver _receiver;
     private readonly IOptions<TelegramBotKitOptions> _options;
     private readonly ILogger<PollingHostedService> _log;
 
     public PollingHostedService(
         ITelegramBotClient bot,
-        UpdateActorScheduler scheduler,
+        IUpdateReceiver receiver,
         IOptions<TelegramBotKitOptions> options,
         ILogger<PollingHostedService> log)
     {
         _bot = bot;
-        _scheduler = scheduler;
+        _receiver = receiver;
         _options = options;
         _log = log;
     }
@@ -32,9 +33,7 @@ internal sealed class PollingHostedService : BackgroundService
         int? offset = null;
         var o = _options.Value;
 
-        _log.LogInformation(
-            "TelegramBotKit polling started (MaxDegreeOfParallelism={Dop}).",
-            o.Polling.MaxDegreeOfParallelism);
+        _log.LogInformation("TelegramBotKit polling started.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -71,12 +70,12 @@ internal sealed class PollingHostedService : BackgroundService
 
             foreach (var upd in updates)
             {
+                await _receiver.ReceiveAsync(upd, stoppingToken).ConfigureAwait(false);
                 offset = upd.Id + 1;
-
-                await _scheduler.EnqueueAsync(upd, stoppingToken).ConfigureAwait(false);
             }
         }
 
         _log.LogInformation("TelegramBotKit polling stopped.");
     }
+
 }

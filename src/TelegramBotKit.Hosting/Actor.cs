@@ -21,11 +21,13 @@ internal sealed class Actor
 
         Touch();
 
-        _ = Task.Run(RunAsync, CancellationToken.None);
+        Completion = Task.Run(RunAsync, CancellationToken.None);
     }
 
+    internal Task Completion { get; }
+
     /// <summary>
-    /// Gets the pending count.
+    /// Gets the number of admitted updates not yet completed, including the currently executing update.
     /// </summary>
     public int PendingCount => Volatile.Read(ref _pending);
 
@@ -34,12 +36,13 @@ internal sealed class Actor
         get
         {
             var ticks = Volatile.Read(ref _lastActivityTicks);
-            return ticks == 0 ? DateTime.UtcNow : new DateTime(ticks, DateTimeKind.Utc);
+            return ticks == 0 ? _owner.UtcNow : new DateTime(ticks, DateTimeKind.Utc);
         }
     }
 
     public ValueTask EnqueueAsync(UpdateWorkItem item)
     {
+        item.Ct.ThrowIfCancellationRequested();
         Interlocked.Increment(ref _pending);
         Touch();
 
@@ -66,31 +69,33 @@ internal sealed class Actor
     {
         await foreach (var item in _queue.Reader.ReadAllAsync().ConfigureAwait(false))
         {
+            Exception? error = null;
             try
             {
                 Touch();
                 await _owner.RunWithGlobalLimitAsync(
                     item.Execute,
                     item.Ct).ConfigureAwait(false);
-                item.Completion.TrySetResult();
-            }
-            catch (OperationCanceledException ex)
-            {
-                item.Completion.TrySetCanceled(ex.CancellationToken);
             }
             catch (Exception ex)
             {
                 // The scheduler observes completion and logs once for either lane.
-                item.Completion.TrySetException(ex);
+                error = ex;
             }
             finally
             {
                 Interlocked.Decrement(ref _pending);
                 Touch();
             }
+            if (error is OperationCanceledException canceled)
+                item.Completion.TrySetCanceled(canceled.CancellationToken);
+            else if (error is not null)
+                item.Completion.TrySetException(error);
+            else
+                item.Completion.TrySetResult();
         }
     }
 
     private void Touch()
-        => Volatile.Write(ref _lastActivityTicks, DateTime.UtcNow.Ticks);
+        => Volatile.Write(ref _lastActivityTicks, _owner.UtcNow.Ticks);
 }

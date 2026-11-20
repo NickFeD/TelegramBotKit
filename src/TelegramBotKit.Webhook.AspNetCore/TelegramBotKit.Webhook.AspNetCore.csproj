@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>TelegramBotKit.Webhook.AspNetCore</PackageId>
+    <Description>ASP.NET Core webhook delivery using TelegramBotKit shared update execution.</Description>
+    <PackageTags>telegram;telegram-bot;bot;webhook;aspnetcore;dotnet</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../TelegramBotKit.Hosting/TelegramBotKit.Hosting.csproj" />
+  </ItemGroup>
+</Project>

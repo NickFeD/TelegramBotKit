@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Dispatching;
 using TelegramBotKit.Fallbacks;
-using TelegramBotKit.Hosting;
+using TelegramBotKit.Polling;
 using TelegramBotKit.Sample.ConsolePolling;
 
 var builder = Host.CreateApplicationBuilder(args);

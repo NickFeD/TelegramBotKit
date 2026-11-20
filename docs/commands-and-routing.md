@@ -36,22 +36,23 @@ Register all attributed commands:
 builder.Services.AddCommands();
 ```
 
-That registration also installs the built-in message and callback-query command
-processing. A normal command bot does not need to add
+`AddTelegramBotKit(...)` installs the built-in message and callback-query command
+processing when those routes are not explicitly configured. `AddCommands()` adds
+attributed command registrations. A normal command bot does not need to add
 `Route(UpdateRoutes.Message)` or `Route(UpdateRoutes.CallbackQuery)` itself. Use an
 explicit update route when handling another Telegram update type, adding typed
 route-local middleware, or deliberately replacing a built-in route; see
 [Update routes](updates.md).
 
-Notes:
-- If `TelegramBotKit.Generators` is installed, `AddCommands()` is compile-time.
-- Otherwise it falls back to reflection-based discovery.
+Core includes the source generator as a compiler asset. `AddCommands()` applies
+the existing generated registrations once per service collection. Runtime assembly scanning and attribute discovery have
+been removed. Explicit generic/fluent registration remains available.
 
-If you want to avoid reflection (for NativeAOT / trimming), you can fail fast when no generated registrations are present:
-
-```csharp
-builder.Services.AddCommands(fallbackToReflection: false);
-```
+`Keyboard.Callback<THandler>()` also requires its generated callback key; use
+`Keyboard.Callback(text, key, args)` when supplying a key explicitly.
+The existing optional `fallbackToReflection` parameter is retained for signature
+compatibility. It does not enable reflection; `false` still rejects missing generated
+registrations. See [generated commands](generated-commands.md).
 
 ## Routing sugar (TelegramBotKit.Routing)
 

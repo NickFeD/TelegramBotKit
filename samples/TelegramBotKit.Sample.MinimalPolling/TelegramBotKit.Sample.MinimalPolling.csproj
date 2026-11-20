@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TelegramBotKit.Hosting\TelegramBotKit.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\TelegramBotKit.Polling\TelegramBotKit.Polling.csproj" />
     <ProjectReference Include="..\..\src\TelegramBotKit\TelegramBotKit.csproj" />
     <ProjectReference Include="..\..\src\TelegramBotKit.Generators\TelegramBotKit.Generators.csproj"
                       OutputItemType="Analyzer"

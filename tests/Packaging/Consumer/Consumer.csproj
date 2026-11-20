@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <TelegramBotKitValidationVersion Condition="'$(TelegramBotKitValidationVersion)' == ''">0.4.0-generation-local</TelegramBotKitValidationVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TelegramBotKit" Version="$(TelegramBotKitValidationVersion)" Condition="'$(UseTransitiveCore)' != 'true'" />
+    <PackageReference Include="TelegramBotKit.Routing" Version="$(TelegramBotKitValidationVersion)" Condition="'$(UseTransitiveCore)' == 'true'" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

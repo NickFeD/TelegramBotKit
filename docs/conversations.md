@@ -104,9 +104,9 @@ public sealed class AskNameCallback : ICallbackCommand
 
 ## Interaction with the hosting scheduler
 
-When you use `TelegramBotKit.Hosting` polling, updates are processed using “actors” (see `./hosting.md`).
+When you use `TelegramBotKit.Polling` or `TelegramBotKit.Webhook.AspNetCore`, shared Hosting processes updates using “actors” (see `./hosting.md`).
 Callback queries are keyed by **user**, which helps keep request/response flows predictable for a single user.
 
 That said, the “one active wait” rule still applies: even with perfect serialization, starting a second wait before finishing the first will throw.
 
-Core applies the same ownership policy to direct dispatch and polling. Responses to an active built-in waiter can pass middleware outside the occupied actor/DOP slot so an awaiting command can resume even with `MaxDegreeOfParallelism = 1`. Global middleware must not hold a per-chat lock across an awaiting command if that same lock is required to process its response.
+Core applies the same ownership policy to direct dispatch, polling and webhook delivery. Responses to an active built-in waiter can pass middleware outside the occupied actor/DOP slot so an awaiting command can resume even with `MaxDegreeOfParallelism = 1`. Global middleware must not hold a per-chat lock across an awaiting command if that same lock is required to process its response.

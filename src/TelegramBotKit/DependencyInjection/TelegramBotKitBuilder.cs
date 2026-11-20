@@ -7,7 +7,7 @@ using TelegramBotKit.Middleware;
 namespace TelegramBotKit.DependencyInjection;
 
 /// <summary>
-/// Provides a telegram bot kit builder.
+/// Configures update routes, middleware and messaging before the dispatcher is resolved.
 /// </summary>
 public sealed class TelegramBotKitBuilder
 {
@@ -18,14 +18,16 @@ public sealed class TelegramBotKitBuilder
     internal TelegramBotKitBuilder(IServiceCollection services) => Services = services;
 
     /// <summary>
-    /// Gets the service provider.
+    /// Gets the service collection used to configure the bot.
     /// </summary>
     public IServiceCollection Services { get; }
 
 
     /// <summary>
-    /// Adds the middleware.
+    /// Adds global middleware resolved from the current update scope, outermost first.
     /// </summary>
+    /// <typeparam name="TMiddleware">The middleware type resolved from the current update scope.</typeparam>
+    /// <returns>The same builder for further configuration.</returns>
     public TelegramBotKitBuilder UseMiddleware<TMiddleware>()
         where TMiddleware : class, IUpdateMiddleware
     {
@@ -36,8 +38,10 @@ public sealed class TelegramBotKitBuilder
     }
 
     /// <summary>
-    /// Adds an inline middleware (ASP.NET-style).
+    /// Adds global middleware whose continuation controls downstream processing.
     /// </summary>
+    /// <param name="middleware">The middleware delegate, invoked in registration order, outermost first.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public TelegramBotKitBuilder UseMiddleware(Func<BotContext, BotContextDelegate, Task> middleware)
     {
         if (middleware is null) throw new ArgumentNullException(nameof(middleware));
@@ -48,9 +52,10 @@ public sealed class TelegramBotKitBuilder
     }
 
     /// <summary>
-    /// Adds an inline middleware using <see cref="ValueTask"/> for reduced allocations when the middleware
-    /// (and/or the next delegate) often completes synchronously.
+    /// Adds global middleware that returns a <see cref="ValueTask"/> and can short-circuit processing.
     /// </summary>
+    /// <param name="middleware">The middleware delegate, invoked in registration order, outermost first.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public TelegramBotKitBuilder UseMiddleware(Func<BotContext, BotContextDelegate, ValueTask> middleware)
     {
         if (middleware is null) throw new ArgumentNullException(nameof(middleware));
@@ -60,8 +65,10 @@ public sealed class TelegramBotKitBuilder
         return this;
     }
     /// <summary>
-    /// Adds the queued message sender.
+    /// Replaces the message sender with the in-memory queued sender and configures its delivery limits.
     /// </summary>
+    /// <param name="configure">An optional delegate that configures queue capacity, throttling and retries.</param>
+    /// <returns>The same builder for further configuration.</returns>
     public TelegramBotKitBuilder UseQueuedMessageSender(Action<QueuedMessageSenderOptions>? configure = null)
     {
         Services.AddTelegramBotKitQueuedMessageSender(configure);
@@ -73,6 +80,9 @@ public sealed class TelegramBotKitBuilder
     /// Explicit configuration owns the entire route, opting out of any built-in terminal.
     /// Reuse the same descriptor to add middleware; only one terminal may be registered.
     /// </remarks>
+    /// <param name="route">The descriptor identifying the Telegram update type and payload extractor.</param>
+    /// <typeparam name="TPayload">The payload type extracted by the route.</typeparam>
+    /// <returns>The builder for the selected route.</returns>
     public UpdateRouteBuilder<TPayload> Route<TPayload>(UpdateRoute<TPayload> route)
         where TPayload : class
     {

@@ -1,36 +1,36 @@
-﻿using Telegram.Bot.Types;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Messaging;
 
 /// <summary>
-/// Provides an edit text.
+/// Specifies replacement text, formatting and an optional inline keyboard for an existing message.
 /// </summary>
 public sealed record EditText
 {
     /// <summary>
-    /// Gets or sets the text.
+    /// Gets the text supplied with this request.
     /// </summary>
     public required string Text { get; init; }
 
     /// <summary>
-    /// Gets or sets the parse mode.
+    /// Gets the text or caption parse mode. Defaults to no markup parsing.
     /// </summary>
     public ParseMode ParseMode { get; init; } = ParseMode.None;
 
     /// <summary>
-    /// Gets or sets the link preview options.
+    /// Gets optional link-preview settings for the message text.
     /// </summary>
     public LinkPreviewOptions? LinkPreviewOptions { get; init; }
 
     /// <summary>
-    /// Gets or sets the message entities.
+    /// Gets explicit formatting entities for the message text.
     /// </summary>
     public IEnumerable<MessageEntity>? Entities { get; init; }
 
     /// <summary>
-    /// Gets or sets the reply markup.
+    /// Gets the optional keyboard markup sent with this request.
     /// </summary>
     public InlineKeyboardMarkup? ReplyMarkup { get; init; }
 }

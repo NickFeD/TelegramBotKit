@@ -11,6 +11,7 @@ using TelegramBotKit.Conversations;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Dispatching;
 using TelegramBotKit.Hosting;
+using TelegramBotKit.Polling;
 using TelegramBotKit.Middleware;
 using Xunit;
 
@@ -93,6 +94,31 @@ public sealed class ConversationDeliveryTests
         Assert.Equal(new[] { "global before 2", "global after 2", "disposed 2" }, runtime.EventsFor(2));
     }
 
+    [Fact]
+    public async Task Scheduled_dispatcher_decorator_preserves_conversation_response_lane()
+    {
+        Assert.True(typeof(IScheduledUpdateDispatcher).IsPublic);
+        await using var runtime = new Runtime(polling: true, decorateDispatcher: true);
+        await runtime.StartAsync();
+        runtime.Send(1, "/wait");
+        await runtime.State.Waiting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        runtime.Send(2, "/response");
+        await runtime.Handled(2);
+        await runtime.Handled(1);
+        Assert.Equal("/response", (await runtime.State.Response.Task).Text);
+        Assert.Equal(new[] { "global before 2", "global after 2", "disposed 2" }, runtime.EventsFor(2));
+        Assert.DoesNotContain("response command", runtime.State.Events);
+    }
+
+    private sealed class ScheduledDecorator(IUpdateDispatcher inner) : IUpdateDispatcher, IScheduledUpdateDispatcher
+    {
+        public Task DispatchAsync(Update update, CancellationToken ct = default) => inner.DispatchAsync(update, ct);
+
+        public Task DispatchScheduledAsync(Update update, CancellationToken ct,
+            Func<Func<Task>, CancellationToken, Task> schedule) =>
+            ((IScheduledUpdateDispatcher)inner).DispatchScheduledAsync(update, ct, schedule);
+    }
+
     private sealed class Runtime : IAsyncDisposable
     {
         private readonly bool _polling;
@@ -101,11 +127,11 @@ public sealed class ConversationDeliveryTests
         private readonly CancellationTokenSource _ct = new();
         private readonly List<Task> _direct = new();
         private readonly ServiceProvider _provider;
-        private readonly IHostedService? _hosted;
+        private readonly IHostedService[] _hosted;
         public State State { get; } = new();
         public WaitForUserResponse Waiter => _provider.GetRequiredService<WaitForUserResponse>();
 
-        public Runtime(bool polling, bool explicitRoute = false, bool blockResponse = false)
+        public Runtime(bool polling, bool explicitRoute = false, bool blockResponse = false, bool decorateDispatcher = false)
         {
             _polling = polling;
             _http = new HttpClient(_httpHandler);
@@ -139,12 +165,22 @@ public sealed class ConversationDeliveryTests
                 }
             }));
             if (explicitRoute) bot.Route(UpdateRoutes.Message).Use<LocalMiddleware>().HandleWith<CustomHandler>();
+            if (decorateDispatcher)
+            {
+                var registration = services.Single(d => d.ServiceType == typeof(IUpdateDispatcher));
+                services.Remove(registration);
+                services.AddSingleton<IUpdateDispatcher>(sp => new ScheduledDecorator(
+                    (IUpdateDispatcher)ActivatorUtilities.CreateInstance(sp, registration.ImplementationType!)));
+            }
             if (polling) services.AddTelegramBotKitPolling();
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
-            _hosted = polling ? _provider.GetRequiredService<IHostedService>() : null;
+            _hosted = polling ? _provider.GetServices<IHostedService>().ToArray() : [];
         }
 
-        public Task StartAsync() => _hosted?.StartAsync(CancellationToken.None) ?? Task.CompletedTask;
+        public async Task StartAsync()
+        {
+            foreach (var service in _hosted) await service.StartAsync(CancellationToken.None);
+        }
         public void Send(int id, string text)
         {
             if (_polling) _httpHandler.Send(id, text);
@@ -158,7 +194,7 @@ public sealed class ConversationDeliveryTests
         public async ValueTask DisposeAsync()
         {
             _ct.Cancel();
-            if (_hosted is not null) await _hosted.StopAsync(CancellationToken.None);
+            foreach (var service in _hosted.Reverse()) await service.StopAsync(CancellationToken.None);
             try { await Task.WhenAll(_direct); } catch (OperationCanceledException) { }
             // Wait for scopes already started by polling before disposing the root provider.
             await Task.WhenAll(State.Started.Select(id => State.Disposed(id).Task)).WaitAsync(TimeSpan.FromSeconds(5));

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 namespace TelegramBotKit.Commands;
 
@@ -11,7 +11,9 @@ public static class TelegramBotKitGeneratedCallbackKeysHook
 {
     private static Func<Type, string?>? _resolver;
 
-    /// <summary>Вызывается сгенерированным кодом.</summary>
+    /// <summary>Replaces the process-wide callback-key resolver with a compiler-generated delegate.</summary>
+    /// <remarks>Resolvers from multiple assemblies are not combined. Applications should use typed keyboard helpers.</remarks>
+    /// <param name="resolver">The generated type-to-key resolver that replaces the current mapping delegate.</param>
     public static void SetResolver(Func<Type, string?> resolver)
         => _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
 

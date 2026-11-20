@@ -1,15 +1,26 @@
-﻿using Telegram.Bot.Types.ReplyMarkups;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace TelegramBotKit.Keyboards;
 
 public static partial class Keyboard
 {
-    private const int DefaultMaxRowsPerPage = 8; // sensible default for UX
-    private const int HardMaxRowsPerPage = 15;   // safety guard, avoid huge markups
+    private const int DefaultMaxRowsPerPage = 8;
+    private const int HardMaxRowsPerPage = 15;
 
     /// <summary>
-    /// Creates a paged inline keyboard from existing rows.
+    /// Builds a page of inline rows with callback navigation, or returns all rows when navigation is disabled.
     /// </summary>
+    /// <remarks>
+    /// Navigation data contains the navigation key, argument prefix and zero-based destination page.
+    /// The page label and disabled arrows emit <c>noop</c>; this helper does not register a handler for it.
+    /// </remarks>
+    /// <param name="rows">The keyboard rows; null rows, null buttons and empty rows are omitted.</param>
+    /// <param name="navKey">The callback key for navigation. A blank key returns all rows without navigation.</param>
+    /// <param name="page">The zero-based page index, clamped to the available pages when navigation is enabled.</param>
+    /// <param name="pageRows">Rows per page; nonpositive values use eight and positive values are capped at fifteen.</param>
+    /// <param name="navArgsPrefix">The first navigation argument, followed by the zero-based destination page.</param>
+    /// <param name="hideUselessArrows">Whether arrows without a destination are hidden; otherwise they emit the raw noop callback.</param>
+    /// <returns>The visible keyboard rows and, when needed, a navigation row.</returns>
     public static InlineKeyboardMarkup PagedInline(
         IEnumerable<IEnumerable<InlineKeyboardButton>> rows,
         string? navKey,
@@ -22,14 +33,13 @@ public static partial class Keyboard
         if (string.IsNullOrWhiteSpace(navArgsPrefix))
             throw new ArgumentException("Navigation prefix is required.", nameof(navArgsPrefix));
 
-        // If navKey is not provided, we still can paginate the visible rows,
-        // but we cannot create navigation buttons.
+        // A missing key disables both slicing and navigation.
         var canNavigate = !string.IsNullOrWhiteSpace(navKey);
 
         var pr = pageRows <= 0 ? DefaultMaxRowsPerPage : pageRows;
         pr = Math.Clamp(pr, 1, HardMaxRowsPerPage);
 
-        // Normalize rows (same style as Inline()).
+        // Remove empty rows before calculating page boundaries.
         var materialized = rows
             .Select(r => (r ?? Array.Empty<InlineKeyboardButton>())
                 .Where(b => b is not null)

@@ -5,7 +5,7 @@ using Telegram.Bot.Types.ReplyMarkups;
 namespace TelegramBotKit.Messaging;
 
 /// <summary>
-/// Provides a send photo.
+/// Specifies a photo, optional caption, keyboard and delivery options for a new message.
 /// </summary>
 public sealed record SendPhoto
 {
@@ -16,42 +16,42 @@ public sealed record SendPhoto
     public int? MessageThreadId { get; init; }
 
     /// <summary>
-    /// Gets or sets the photo.
+    /// Gets the photo file, stream, URL or Telegram file identifier supplied with this request.
     /// </summary>
     public required InputFile Photo { get; init; }
 
     /// <summary>
-    /// Gets or sets the caption.
+    /// Gets the optional photo caption.
     /// </summary>
     public string? Caption { get; init; }
 
     /// <summary>
-    /// Gets or sets the parse mode.
+    /// Gets the text or caption parse mode. Defaults to no markup parsing.
     /// </summary>
     public ParseMode ParseMode { get; init; } = ParseMode.None;
 
     /// <summary>
-    /// Gets or sets the caption entities.
+    /// Gets explicit formatting entities for the photo caption.
     /// </summary>
     public IEnumerable<MessageEntity>? CaptionEntities { get; init; }
 
     /// <summary>
-    /// Gets or sets the reply markup.
+    /// Gets the optional keyboard markup sent with this request.
     /// </summary>
     public ReplyMarkup? ReplyMarkup { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether notifications are disabled.
+    /// Gets the silent-delivery flag for the new message.
     /// </summary>
     public bool DisableNotification { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether content is protected.
+    /// Gets the content-protection flag for the new message.
     /// </summary>
     public bool ProtectContent { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether spoiler mode is enabled.
+    /// Gets whether the photo is displayed behind a spoiler overlay.
     /// </summary>
     public bool HasSpoiler { get; init; }
 }

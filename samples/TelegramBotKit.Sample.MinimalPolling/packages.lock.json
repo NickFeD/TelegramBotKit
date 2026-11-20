@@ -308,7 +308,13 @@
         "dependencies": {
           "Microsoft.Extensions.Hosting": "[10.0.3, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.3, )",
-          "TelegramBotKit": "[0.3.2, )"
+          "TelegramBotKit": "[0.4.0-preview.1, )"
+        }
+      },
+      "telegrambotkit.polling": {
+        "type": "Project",
+        "dependencies": {
+          "TelegramBotKit.Hosting": "[0.4.0-preview.1, )"
         }
       }
     }

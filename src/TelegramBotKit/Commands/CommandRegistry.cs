@@ -4,9 +4,8 @@ using Telegram.Bot.Types;
 namespace TelegramBotKit.Commands;
 
 // NOTE: These delegates are internal by design.
-// They give us an AOT-friendly seam:
-// - today invokers may resolve handlers by Type (reflection-based scanning)
-// - tomorrow a source-generator can emit invokers that resolve via generics (no reflection)
+// Generated and explicit registrations use the same typed registration helpers.
+// Runtime discovery does not scan assemblies or read command attributes.
 internal delegate ValueTask MessageCommandInvoker(Message message, BotContext ctx);
 internal delegate ValueTask TextCommandInvoker(Message message, BotContext ctx);
 internal delegate ValueTask CallbackCommandInvoker(CallbackQuery query, string[] args, BotContext ctx);
@@ -44,8 +43,8 @@ internal sealed class CommandRegistry
         }
 
         // Registry is read-only after startup. Frozen dictionaries improve lookup speed.
-        _messageBySlash = msg.ToFrozenDictionary();
-        _callbackByKey = cb.ToFrozenDictionary();
+        _messageBySlash = msg.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        _callbackByKey = cb.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         var textExact = new Dictionary<string, TextCommandInvoker>(StringComparer.Ordinal);
         var textIgnore = new Dictionary<string, TextCommandInvoker>(StringComparer.OrdinalIgnoreCase);
@@ -77,8 +76,8 @@ internal sealed class CommandRegistry
                 throw new InvalidOperationException($"Text trigger '{kv.Key}' is registered both case-sensitive and ignoreCase.");
         }
 
-        _textExact = textExact.ToFrozenDictionary();
-        _textIgnoreCase = textIgnore.ToFrozenDictionary();
+        _textExact = textExact.ToFrozenDictionary(StringComparer.Ordinal);
+        _textIgnoreCase = textIgnore.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
     public bool TryGetMessageCommand(string slash, out MessageCommandInvoker invoker)
