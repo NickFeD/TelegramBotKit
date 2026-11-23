@@ -26,6 +26,9 @@ API and behavior changes since 0.3.2.
 
 ## Compatibility and migration
 
+- Runtime packages target .NET 8, 9, 10 and 11. The generator targets
+  `netstandard2.0` and Roslyn 4.8, allowing consumers to build with .NET SDK 8 or later.
+  Building the repository's complete target set requires the pinned .NET SDK 11.
 - Reference Core and remove the separate Generators PackageReference.
 - Continue using `services.AddCommands()` for attributed commands.
 - `AddCommands(IServiceCollection, bool fallbackToReflection = true)` retains its

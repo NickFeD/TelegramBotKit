@@ -4,6 +4,11 @@
 
 This guide builds the smallest polling bot with one `/start` command.
 
+TelegramBotKit supports .NET 8, 9, 10 and 11 with .NET SDK 8 or later for consumers.
+The example below targets `net10.0`; use `net8.0`, `net9.0` or `net11.0` to match
+your application's runtime. Building the library repository itself requires
+the .NET SDK 11 version pinned in `global.json`.
+
 ## 1. Create the project
 
 ```bash

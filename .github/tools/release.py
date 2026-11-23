@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
+from symbol_validation import validate_symbol_pairs
 
 
 VERSION = ET.parse("Directory.Build.props").findtext(".//Version")
@@ -30,6 +31,19 @@ def require(condition, detail):
 def run(*args):
     print("+", *map(str, args), flush=True)
     subprocess.run(list(map(str, args)), check=True)
+
+
+def target_frameworks(project):
+    tree = ET.parse(project)
+    value = tree.findtext(".//TargetFrameworks") or tree.findtext(".//TargetFramework")
+    require(value, f"{project}: target frameworks are missing")
+    return value.split(";")
+
+
+def require_runtime_assets(names, package, frameworks):
+    required = {f"lib/{framework}/{package}.{extension}"
+                for framework in frameworks for extension in ("dll", "xml")}
+    require(required <= names, f"{package}: missing runtime assets {sorted(required - names)}")
 
 
 def check_configurations(paths):
@@ -81,7 +95,11 @@ def validate():
                 require(not any(n.startswith(("lib/", "ref/")) for n in names), f"{filename}: analyzer runtime assets")
                 require(not metadata.findall(".//n:dependency", ns), f"{filename}: analyzer dependencies")
             else:
-                required |= {f"lib/net10.0/{package}.dll", f"lib/net10.0/{package}.xml"}
+                frameworks = target_frameworks(project)
+                require_runtime_assets(names, package, frameworks)
+                groups = metadata.findall("n:dependencies/n:group", ns)
+                actual_frameworks = {group.get("targetFramework") for group in groups}
+                require(actual_frameworks == set(frameworks), f"{filename}: dependency groups {actual_frameworks}")
                 if package == "TelegramBotKit":
                     required.add("analyzers/dotnet/cs/TelegramBotKit.Generators.dll")
             require(required <= names, (filename, required - names))
@@ -92,11 +110,19 @@ def validate():
                 if dependency.get("id") in PACKAGES:
                     require(dependency.get("version") in (VERSION, f"[{VERSION}, )"), ET.tostring(dependency))
             pdbs = [archive.read(n) for n in names if n.endswith(".pdb")]
+            assemblies = {n: archive.read(n) for n in names if n.endswith((".dll", ".exe"))}
+            inline_symbols = {n: archive.read(n) for n in names if n.endswith(".pdb")}
         if tree.findtext(".//IncludeSymbols") != "false":
             symbols = f"{package}.{VERSION}.snupkg"
             expected.add(symbols)
             with zipfile.ZipFile(OUTPUT / symbols) as archive:
-                pdbs += [archive.read(n) for n in archive.namelist() if n.endswith(".pdb")]
+                symbol_files = {n: archive.read(n) for n in archive.namelist() if n.endswith(".pdb")}
+                require(symbol_files, f"{symbols}: no PDB files")
+                try:
+                    validate_symbol_pairs(assemblies, {**inline_symbols, **symbol_files})
+                except ValueError as error:
+                    require(False, f"{symbols}: {error}")
+                pdbs += list(symbol_files.values())
         require(pdbs and all(p.startswith(b"BSJB") for p in pdbs), f"{package}: portable PDBs")
         require(all(b"raw.githubusercontent.com/NickFeD/TelegramBotKit/" in p for p in pdbs), f"Missing SourceLink: {package}")
         print(f"Validated: {filename}")
@@ -120,7 +146,7 @@ def build():
     configuration_paths = subprocess.check_output(["git", "ls-files", "*appsettings*.json"], text=True).splitlines()
     check_configurations(configuration_paths)
     os.environ["ContinuousIntegrationBuild"] = "true"
-    run(sys.executable, "-m", "unittest", "discover", "-s", Path(__file__).resolve().parent, "-p", "test_release.py")
+    run(sys.executable, "-m", "unittest", "discover", "-s", Path(__file__).resolve().parent, "-p", "test_*.py")
     samples = sorted(Path("samples").glob("*/*.csproj"))
     for project in [*PROJECTS, *TEST_PROJECTS, *samples]:
         run("dotnet", "restore", project, "--locked-mode")
@@ -143,7 +169,10 @@ def build():
         mode = f"-p:UseTransitiveCore={transitive}"
         run("dotnet", "restore", consumer, "--source", OUTPUT, "--source", global_cache,
             "--packages", OUTPUT / "consumer-cache", version_property, mode, "-p:NuGetAudit=false")
-        run("dotnet", "run", "--project", consumer, "-c", "Release", "--no-restore", version_property, mode)
+        for framework in target_frameworks(consumer):
+            run("dotnet", "run", "--project", consumer, "-c", "Release", "--no-restore",
+                "--framework", framework, version_property, mode)
+    run(sys.executable, Path(__file__).resolve().parent / "check_sdk_consumers.py", "--packages", OUTPUT)
 
 
 if __name__ == "__main__":

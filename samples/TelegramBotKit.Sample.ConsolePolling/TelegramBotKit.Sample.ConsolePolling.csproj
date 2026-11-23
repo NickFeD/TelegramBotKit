@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishAot>true</PublishAot>
+    <!-- Native AOT is an explicit publish option, not part of the portable sample build. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- The sample is not a public package, so it does not emit an IntelliSense file. -->
     <GenerateDocumentationFile>false</GenerateDocumentationFile>

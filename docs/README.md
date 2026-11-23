@@ -33,6 +33,7 @@ for package changes, route replacements and generated command registration.
 
 ## Project docs
 
+- [What's new in 0.4.0](release-notes-0.4.0.md) — features, fixes and compatibility changes since 0.3.2
 - [ConsolePolling verification](samples/console-polling.md) — manual scenarios, expected results and sample dependencies
 - [PhotoSelector sample](samples/photo-selector.md) — media browsing, selection and export
 - [Webhook sample](samples/webhook.md) — configuration and explicit webhook registration

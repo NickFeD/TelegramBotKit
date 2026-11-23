@@ -101,7 +101,13 @@ public sealed class WaitForUserResponse
     }
 
     private bool RemoveOwnWaiter(WaitKey key, TaskCompletionSource<Message> waiter) =>
+#if NET9_0_OR_GREATER
         _waiters.TryRemove(new KeyValuePair<WaitKey, TaskCompletionSource<Message>>(key, waiter));
+#else
+        // ConcurrentDictionary implements this as an atomic key-and-value removal on .NET 8.
+        ((ICollection<KeyValuePair<WaitKey, TaskCompletionSource<Message>>>)_waiters)
+            .Remove(new KeyValuePair<WaitKey, TaskCompletionSource<Message>>(key, waiter));
+#endif
 
     private readonly record struct WaitKey(long ChatId, long UserId);
 }

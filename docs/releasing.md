@@ -6,7 +6,10 @@ by the [0.3.2 → 0.4.0 migration guide](migration-0.3.2-to-0.4.0.md).
 
 ## Reproduce the validation locally
 
-Install Python 3 and .NET SDK **10.0.404**, pinned in `global.json`.
+Install Python 3 and .NET SDK **11.0.100**, pinned in `global.json`, plus the
+.NET and ASP.NET Core runtimes for **8, 9, 10 and 11** to execute every target.
+Install **.NET SDK 8** as well: the gate builds isolated consumers using the oldest
+supported compiler, independently of the repository's SDK 11 pin.
 Roll-forward is disabled so local builds and CI select the same SDK.
 From the repository root, with an empty `artifacts/packages` directory:
 
@@ -22,6 +25,11 @@ packs the five runtime packages, and validates the archives. The compiler projec
 is built as a Core dependency and is not a standalone NuGet package. A final
 isolated-cache consumer run checks generated command execution with direct Core
 and transitive Routing references, without a separate generator reference.
+The library test project runs on all four runtimes. Each runtime package must
+contain DLL/XML assets and dependency groups for all four target frameworks,
+and both packed consumer modes run on each runtime.
+An additional SDK 8 check builds and runs both reference modes from temporary
+projects outside the repository, verifying commands, callback keys and messaging helpers.
 It also checks that all four examples reject missing tokens before starting delivery.
 These checks use temporary configuration directories and do not contact Telegram.
 It stops on the first failure and does not publish anything.
@@ -47,14 +55,21 @@ Existing output is preserved and rejected rather than overwritten.
 Validation checks package identities and versions, MIT license, README, icon,
 repository commit, runtime DLL/XML documentation, generator analyzer layout,
 internal dependency versions, portable PDBs and embedded SourceLink URLs.
+Each PDB must have a corresponding DLL/EXE at the same package path; its portable
+identifier and checksum must match that exact binary before upload.
 To repeat only artifact validation: `python .github/tools/release.py validate`.
 Review build warnings; do not globally suppress them for a release.
 
 ## CI and publication
 
+GitHub Actions orchestrates publication in YAML, and `dotnet nuget push` uploads
+the packages. Python is used only for shared validation in CI and local runs;
+applications using TelegramBotKit do not need Python.
+
 `.github/workflows/ci.yml` runs the same build command on pushes and pull
 requests and uploads package and symbol artifacts. Both workflows install
-SDK 10.0.404 through `global.json` with roll-forward disabled.
+SDK 11.0.100 through `global.json` with roll-forward disabled. Both workflows also
+install the 8, 9, 10 and 11 SDK channels to provide the corresponding runtimes.
 
 `.github/workflows/publish-on-version-bump.yml` publishes on pushes to `master`
 or manual `workflow_dispatch`. **Manual dispatch publishes; it is not a dry run.**
@@ -75,6 +90,17 @@ state under the same version. If the selected version is taken, report the confl
 before explicitly selecting another version. Do not silently advance versions.
 NuGet publication across multiple packages is not atomic: a partial publication
 requires investigation and a new version for changed sources, not duplicate skips.
+
+If NuGet rejects only the symbols, compare the `.snupkg` with the **already published**
+`.nupkg`. A rebuilt DLL or PDB can have a different identifier even under the same
+package version. Upload only symbols matching the published DLLs, or publish changed
+binaries under a new version. Do not use `--skip-duplicate` to pair newly built
+symbols with an older binary package.
+
+ConsolePolling's ordinary build is portable and has no implicit publishing RID.
+Native AOT is a separate, explicit publish option requiring its own restore and
+validation. Enabling it by default makes lock files depend on the build machine's
+RID and can break locked restores on another operating system.
 
 Commit the reviewed release changes before publishing so SourceLink refers to
 committed sources. Local validation of uncommitted changes is not a published release.

@@ -10,6 +10,9 @@ import urllib.error
 from unittest.mock import call, patch
 
 import release
+import check_sdk_consumers
+
+SDK = release.json.loads(Path('global.json').read_text())['sdk']['version']
 
 
 class VersionGateTests(unittest.TestCase):
@@ -47,7 +50,7 @@ class BuildGateTests(unittest.TestCase):
     def test_build_runs_every_test_project_and_both_packed_consumers(self):
         with tempfile.TemporaryDirectory() as output, \
                 patch.object(release, 'OUTPUT', Path(output)), \
-                patch('release.subprocess.check_output', return_value='10.0.404\n'), \
+                patch('release.subprocess.check_output', return_value=SDK + '\n'), \
                 patch('release.run') as run, patch('release.validate') as validate, \
                 patch('release.check_configurations'), \
                 patch.dict(os.environ):
@@ -58,22 +61,26 @@ class BuildGateTests(unittest.TestCase):
             self.assertIn(call('dotnet', 'restore', path, '--locked-mode'), commands)
             self.assertIn(call('dotnet', 'test', path, '-c', 'Release', '--no-restore'), commands)
         self.assertIn(call(sys.executable, '-m', 'unittest', 'discover', '-s',
-                           Path(release.__file__).resolve().parent, '-p', 'test_release.py'), commands)
+                           Path(release.__file__).resolve().parent, '-p', 'test_*.py'), commands)
         consumers = [args.args for args in commands if args.args[:2] == ('dotnet', 'run')]
-        self.assertEqual(len(consumers), 2)
-        self.assertTrue(any('-p:UseTransitiveCore=false' in command for command in consumers))
-        self.assertTrue(any('-p:UseTransitiveCore=true' in command for command in consumers))
+        self.assertEqual(len(consumers), 8)
+        for framework in ('net8.0', 'net9.0', 'net10.0', 'net11.0'):
+            for mode in ('false', 'true'):
+                self.assertTrue(any(command[command.index('--framework') + 1] == framework
+                                    and '-p:UseTransitiveCore=' + mode in command for command in consumers))
         self.assertFalse(any('push' in command.args for command in commands))
+        self.assertIn(call(sys.executable, Path(release.__file__).resolve().parent / 'check_sdk_consumers.py',
+                           '--packages', Path(output)), commands)
         validate.assert_called_once_with()
 
     def test_sdk_mismatch_stops_before_any_restore_or_tests(self):
-        with patch('release.subprocess.check_output', return_value='11.0.100\n'), patch('release.run') as run:
-            with self.assertRaisesRegex(SystemExit, 'requires SDK 10.0.404'):
+        with patch('release.subprocess.check_output', return_value='10.0.404\n'), patch('release.run') as run:
+            with self.assertRaisesRegex(SystemExit, 'requires SDK ' + SDK):
                 release.build()
         run.assert_not_called()
 
     def test_missing_test_discovery_is_not_a_successful_release(self):
-        with patch('release.subprocess.check_output', return_value='10.0.404\n'), \
+        with patch('release.subprocess.check_output', return_value=SDK + '\n'), \
                 patch.object(release, 'TEST_PROJECTS', []), patch('release.run') as run:
             with self.assertRaisesRegex(SystemExit, 'No test projects'):
                 release.build()
@@ -84,11 +91,71 @@ class BuildGateTests(unittest.TestCase):
             sentinel = Path(output) / 'previous.nupkg'
             sentinel.write_bytes(b'previous release')
             with patch.object(release, 'OUTPUT', Path(output)), \
-                    patch('release.subprocess.check_output', return_value='10.0.404\n'), patch('release.run') as run:
+                    patch('release.subprocess.check_output', return_value=SDK + '\n'), patch('release.run') as run:
                 with self.assertRaisesRegex(SystemExit, 'empty'):
                     release.build()
             self.assertEqual(sentinel.read_bytes(), b'previous release')
             run.assert_not_called()
+
+
+class FrameworkAssetTests(unittest.TestCase):
+    def test_all_runtime_frameworks_require_dll_and_xml(self):
+        frameworks = ('net8.0', 'net9.0', 'net10.0', 'net11.0')
+        names = {f'lib/{framework}/Example.{extension}' for framework in frameworks for extension in ('dll', 'xml')}
+        release.require_runtime_assets(names, 'Example', frameworks)
+        for missing in sorted(names):
+            with self.subTest(missing=missing):
+                with self.assertRaisesRegex(SystemExit, 'missing runtime assets') as error:
+                    release.require_runtime_assets(names - {missing}, 'Example', frameworks)
+                self.assertIn(missing, str(error.exception))
+
+    def test_single_and_multiple_target_frameworks_are_discovered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / 'Example.csproj'
+            for element, value, expected in (
+                    ('TargetFramework', 'net10.0', ['net10.0']),
+                    ('TargetFrameworks', 'net8.0;net9.0;net10.0;net11.0', ['net8.0', 'net9.0', 'net10.0', 'net11.0'])):
+                project.write_text(f'<Project><PropertyGroup><{element}>{value}</{element}></PropertyGroup></Project>', encoding='utf-8')
+                self.assertEqual(release.target_frameworks(project), expected)
+            project.write_text('<Project />', encoding='utf-8')
+            with self.assertRaisesRegex(SystemExit, 'target frameworks are missing'):
+                release.target_frameworks(project)
+
+
+class MinimumSdkTests(unittest.TestCase):
+    def test_sdk8_consumers_use_old_compiler_for_both_reference_modes(self):
+        installed = '8.0.100 [sdk]\n8.0.428 [sdk]\n11.0.100 [sdk]\n'
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(sys, 'argv', ['check_sdk_consumers.py', '--packages', directory]), \
+                patch('check_sdk_consumers.subprocess.check_output', side_effect=[installed, '8.0.428\n']), \
+                patch('check_sdk_consumers.subprocess.run') as run:
+            def check_workspace(*args, **kwargs):
+                workspace = Path(kwargs['cwd'])
+                self.assertEqual(release.json.loads((workspace / 'global.json').read_text())['sdk']['version'], '8.0.428')
+                self.assertEqual(release.ET.parse(workspace / 'Consumer.csproj').findtext('.//TargetFramework'), 'net8.0')
+            run.side_effect = check_workspace
+            check_sdk_consumers.main()
+        commands = [entry.args[0] for entry in run.call_args_list]
+        self.assertEqual(len(commands), 4)
+        for mode in ('false', 'true'):
+            self.assertEqual(sum('-p:UseTransitiveCore=' + mode in command for command in commands), 2)
+        self.assertEqual(sum(command[:2] == ['dotnet', 'run'] for command in commands), 2)
+
+    def test_missing_sdk8_stops_before_consumer_restore(self):
+        with patch.object(sys, 'argv', ['check_sdk_consumers.py', '--packages', 'artifacts/packages']), \
+                patch('check_sdk_consumers.subprocess.check_output', return_value='11.0.100 [sdk]\n'), \
+                patch('check_sdk_consumers.subprocess.run') as run:
+            with self.assertRaisesRegex(SystemExit, 'Install .NET SDK 8'):
+                check_sdk_consumers.main()
+        run.assert_not_called()
+
+    def test_wrong_sdk_resolution_stops_before_consumer_restore(self):
+        with patch.object(sys, 'argv', ['check_sdk_consumers.py', '--packages', 'artifacts/packages']), \
+                patch('check_sdk_consumers.subprocess.check_output', side_effect=['8.0.428 [sdk]\n', '11.0.100\n']), \
+                patch('check_sdk_consumers.subprocess.run') as run:
+            with self.assertRaisesRegex(SystemExit, 'Expected SDK 8.0.428'):
+                check_sdk_consumers.main()
+        run.assert_not_called()
 
 
 class ConfigurationGateTests(unittest.TestCase):

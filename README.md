@@ -1,6 +1,6 @@
 # TelegramBotKit
 
-TelegramBotKit is a .NET 10 toolkit for building Telegram bots with polling or ASP.NET Core webhooks,
+TelegramBotKit is a .NET 8, 9, 10 and 11 toolkit for building Telegram bots with polling or ASP.NET Core webhooks,
 commands, strongly typed update routes, and nested middleware.
 
 Its core features include:
@@ -21,6 +21,11 @@ See the [documentation index](docs/README.md) for feature guides and the
 Upgrading an existing bot? Follow the [0.3.2 → 0.4.0 migration guide](docs/migration-0.3.2-to-0.4.0.md).
 
 ## Packages
+
+All five runtime packages include assets for `net8.0`, `net9.0`, `net10.0` and `net11.0`.
+NuGet selects the asset matching the consuming application. The bundled generator
+supports .NET SDK 8 and later; building this repository requires the SDK pinned in
+`global.json` (.NET SDK 11). The samples and benchmarks continue to target .NET 10.
 
 - `TelegramBotKit` — core configuration, commands, routes, middleware, and messaging.
 - `TelegramBotKit.Hosting` — shared admission, scheduling and execution lifetime.

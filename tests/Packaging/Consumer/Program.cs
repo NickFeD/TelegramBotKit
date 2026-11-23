@@ -5,6 +5,22 @@ using TelegramBotKit.Commands;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Dispatching;
 using TelegramBotKit.Keyboards;
+using TelegramBotKit.Messaging;
+
+#if NET8_0
+const int expectedRuntime = 8;
+#elif NET9_0
+const int expectedRuntime = 9;
+#elif NET10_0
+const int expectedRuntime = 10;
+#elif NET11_0
+const int expectedRuntime = 11;
+#else
+#error Add a runtime assertion for this target framework.
+#endif
+if (Environment.Version.Major != expectedRuntime)
+    throw new InvalidOperationException($"Expected runtime {expectedRuntime}, got {Environment.Version}.");
+Console.WriteLine($"PACKED_RUNTIME_OK: net{expectedRuntime}.0");
 
 var services = new ServiceCollection();
 var calls = new List<string>();
@@ -15,6 +31,10 @@ services.AddTelegramBotKit(o => o.Token = "123456:PACKAGING_OFFLINE_TOKEN", http
 services.AddCommands().AddCommands();
 await using var provider = services.BuildServiceProvider();
 var dispatcher = provider.GetRequiredService<IUpdateDispatcher>();
+var sender = provider.GetRequiredService<IMessageSender>();
+if (sender.TrySendText(new CallbackQuery { Id = "inline", From = new User { Id = 7 } },
+        new SendText { Text = "no message" }, out var inlineSend) || inlineSend is not null)
+    throw new InvalidOperationException("Inline callback must not start a send operation.");
 foreach (var text in new[] { "/app", "hello" })
     await dispatcher.DispatchAsync(new Update { Id = 1, Message = new Message
         { Id = 1, Chat = new Chat { Id = 42 }, From = new User { Id = 7 }, Text = text } });
