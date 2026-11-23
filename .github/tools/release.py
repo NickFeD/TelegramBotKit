@@ -1,10 +1,12 @@
-"""Shared, fail-fast preview validation. Run from the repository root."""
+"""Shared, fail-fast release validation. Run from the repository root; never publishes."""
 import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -13,14 +15,28 @@ import zipfile
 
 VERSION = ET.parse("Directory.Build.props").findtext(".//Version")
 PROJECTS = sorted(Path("src").glob("*/*.csproj"))
+TEST_PROJECTS = sorted(p for p in Path("tests").glob("*/*.csproj")
+                       if ET.parse(p).findtext(".//IsTestProject") == "true")
 PACKAGES = {ET.parse(p).findtext(".//PackageId"): p for p in PROJECTS
             if ET.parse(p).findtext(".//IsPackable") != "false"}
 OUTPUT = Path("artifacts/packages")
 
 
+def require(condition, detail):
+    if not condition:
+        raise SystemExit(f"Package validation failed: {detail}")
+
+
 def run(*args):
     print("+", *map(str, args), flush=True)
     subprocess.run(list(map(str, args)), check=True)
+
+
+def check_configurations(paths):
+    credential = re.compile(r'"(?:Token|SecretToken|ApiKey)"\s*:\s*"(?:\d+:[A-Za-z0-9_-]{20,}|[A-Za-z0-9_-]{32,})"', re.IGNORECASE)
+    for path in paths:
+        if credential.search(Path(path).read_text(encoding="utf-8-sig")):
+            raise SystemExit(f"Credential-like value in tracked configuration: {path}. Use local configuration or environment variables.")
 
 
 def check_version():
@@ -51,38 +67,41 @@ def validate():
             spec = ET.fromstring(archive.read(f"{package}.nuspec"))
             ns = {"n": spec.tag.split("}")[0].strip("{")}
             metadata = spec.find("n:metadata", ns)
-            assert metadata.findtext("n:id", namespaces=ns) == package
-            assert metadata.findtext("n:version", namespaces=ns) == VERSION
-            assert metadata.findtext("n:license", namespaces=ns) == "MIT"
-            assert metadata.findtext("n:readme", namespaces=ns) == "README.md"
-            assert metadata.findtext("n:icon", namespaces=ns) == "icon.png"
+            require(metadata.findtext("n:id", namespaces=ns) == package, f"{filename}: package ID")
+            require(metadata.findtext("n:version", namespaces=ns) == VERSION, f"{filename}: package version")
+            require(metadata.findtext("n:license", namespaces=ns) == "MIT", f"{filename}: license")
+            require(metadata.findtext("n:readme", namespaces=ns) == "README.md", f"{filename}: readme")
+            require(metadata.findtext("n:icon", namespaces=ns) == "icon.png", f"{filename}: icon")
             repo = metadata.find("n:repository", ns)
-            assert repo is not None and repo.get("commit")
+            require(repo is not None and repo.get("commit"), f"{filename}: repository commit")
             required = {"README.md", "LICENSE", "icon.png"}
             if analyzer:
                 required |= {f"analyzers/dotnet/cs/{package}.dll",
                              f"analyzers/dotnet/cs/{package}.pdb"}
-                assert not any(n.startswith(("lib/", "ref/")) for n in names)
-                assert not metadata.findall(".//n:dependency", ns)
+                require(not any(n.startswith(("lib/", "ref/")) for n in names), f"{filename}: analyzer runtime assets")
+                require(not metadata.findall(".//n:dependency", ns), f"{filename}: analyzer dependencies")
             else:
                 required |= {f"lib/net10.0/{package}.dll", f"lib/net10.0/{package}.xml"}
                 if package == "TelegramBotKit":
                     required.add("analyzers/dotnet/cs/TelegramBotKit.Generators.dll")
-            assert required <= names, (filename, required - names)
+            require(required <= names, (filename, required - names))
+            if package == "TelegramBotKit":
+                require(not any(d.get("id", "").startswith("Microsoft.CodeAnalysis") or d.get("id") == "TelegramBotKit.Generators"
+                                for d in metadata.findall(".//n:dependency", ns)), f"{filename}: compiler runtime dependency")
             for dependency in metadata.findall(".//n:dependency", ns):
                 if dependency.get("id") in PACKAGES:
-                    assert dependency.get("version") in (VERSION, f"[{VERSION}, )"), ET.tostring(dependency)
+                    require(dependency.get("version") in (VERSION, f"[{VERSION}, )"), ET.tostring(dependency))
             pdbs = [archive.read(n) for n in names if n.endswith(".pdb")]
         if tree.findtext(".//IncludeSymbols") != "false":
             symbols = f"{package}.{VERSION}.snupkg"
             expected.add(symbols)
             with zipfile.ZipFile(OUTPUT / symbols) as archive:
                 pdbs += [archive.read(n) for n in archive.namelist() if n.endswith(".pdb")]
-        assert pdbs and all(p.startswith(b"BSJB") for p in pdbs), package
-        assert all(b"raw.githubusercontent.com/NickFeD/TelegramBotKit/" in p for p in pdbs), f"Missing SourceLink: {package}"
+        require(pdbs and all(p.startswith(b"BSJB") for p in pdbs), f"{package}: portable PDBs")
+        require(all(b"raw.githubusercontent.com/NickFeD/TelegramBotKit/" in p for p in pdbs), f"Missing SourceLink: {package}")
         print(f"Validated: {filename}")
     actual = {p.name for p in OUTPUT.glob("*.nupkg")} | {p.name for p in OUTPUT.glob("*.snupkg")}
-    assert actual == expected, (actual, expected)
+    require(actual == expected, (actual, expected))
     (OUTPUT / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256((OUTPUT / n).read_bytes()).hexdigest()}  {n}\n"
         for n in sorted(expected)), encoding="utf-8")
@@ -90,21 +109,28 @@ def validate():
 
 def build():
     sdk = json.loads(Path("global.json").read_text())["sdk"]["version"]
-    assert subprocess.check_output(["dotnet", "--version"], text=True).strip() == sdk
+    actual_sdk = subprocess.check_output(["dotnet", "--version"], text=True).strip()
+    if actual_sdk != sdk:
+        raise SystemExit(f"Release validation requires SDK {sdk}; selected {actual_sdk}.")
+    if not TEST_PROJECTS:
+        raise SystemExit("No test projects discovered; refusing an untested release.")
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if any(OUTPUT.iterdir()):
         raise SystemExit(f"Use an empty {OUTPUT} directory to avoid mixing release artifacts.")
+    configuration_paths = subprocess.check_output(["git", "ls-files", "*appsettings*.json"], text=True).splitlines()
+    check_configurations(configuration_paths)
     os.environ["ContinuousIntegrationBuild"] = "true"
-    run("python", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_release.py")
-    tests = Path("tests/TelegramBotKit.Tests/TelegramBotKit.Tests.csproj")
+    run(sys.executable, "-m", "unittest", "discover", "-s", Path(__file__).resolve().parent, "-p", "test_release.py")
     samples = sorted(Path("samples").glob("*/*.csproj"))
-    for project in [*PROJECTS, tests, *samples]:
+    for project in [*PROJECTS, *TEST_PROJECTS, *samples]:
         run("dotnet", "restore", project, "--locked-mode")
     for project in PROJECTS:
-        run("dotnet", "build", project, "-c", "Release", "--no-restore")
-    run("dotnet", "test", tests, "-c", "Release", "--no-restore")
+        run("dotnet", "build", project, "-c", "Release", "--no-restore", "-warnaserror")
+    for project in TEST_PROJECTS:
+        run("dotnet", "test", project, "-c", "Release", "--no-restore")
     for project in samples:
-        run("dotnet", "build", project, "-c", "Release", "--no-restore")
+        run("dotnet", "build", project, "-c", "Release", "--no-restore", "-warnaserror")
+    run(sys.executable, Path(__file__).resolve().parent / "check_samples.py")
     for project in PACKAGES.values():
         run("dotnet", "pack", project, "-c", "Release", "--no-build", "-o", OUTPUT)
     validate()
@@ -123,5 +149,9 @@ def build():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["build", "validate", "check-version"])
-    command = parser.parse_args().command
+    parser.add_argument("--output", type=Path, default=OUTPUT,
+                        help="Empty package output directory (default: artifacts/packages).")
+    arguments = parser.parse_args()
+    OUTPUT = arguments.output
+    command = arguments.command
     {"build": build, "validate": validate, "check-version": check_version}[command]()

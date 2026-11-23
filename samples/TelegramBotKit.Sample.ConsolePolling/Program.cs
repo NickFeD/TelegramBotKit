@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Dispatching;
 using TelegramBotKit.Fallbacks;
@@ -8,8 +10,13 @@ using TelegramBotKit.Polling;
 using TelegramBotKit.Sample.ConsolePolling;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Logging.ClearProviders().AddConsole();
 
-builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
 
 builder.Services.AddSingleton<IDefaultMessageHandler, SampleDefaultHandlers>();
 builder.Services.AddSingleton<IDefaultCallbackHandler, SampleDefaultHandlers>();
@@ -37,4 +44,12 @@ bot.UseQueuedMessageSender(o =>
 builder.Services.AddTelegramBotKitPolling();
 
 var host = builder.Build();
-await host.RunAsync();
+try
+{
+    await host.RunAsync();
+}
+catch (OptionsValidationException error)
+{
+    Console.Error.WriteLine("Configuration error: " + string.Join("; ", error.Failures));
+    Environment.ExitCode = 1;
+}

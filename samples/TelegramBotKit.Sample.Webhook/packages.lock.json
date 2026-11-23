@@ -16,13 +16,13 @@
       "telegrambotkit.hosting": {
         "type": "Project",
         "dependencies": {
-          "TelegramBotKit": "[0.4.0-preview.1, )"
+          "TelegramBotKit": "[0.4.0, )"
         }
       },
       "telegrambotkit.webhook.aspnetcore": {
         "type": "Project",
         "dependencies": {
-          "TelegramBotKit.Hosting": "[0.4.0-preview.1, )"
+          "TelegramBotKit.Hosting": "[0.4.0, )"
         }
       }
     }

@@ -63,4 +63,47 @@ public sealed class GeneratorPackagingTests
         Assert.Contains("AddMessageCommand<global::LibraryCommand>", source);
         Assert.Contains("AddMessageCommand<global::AppCommand>", source);
     }
+
+    [Theory]
+    [InlineData("LineFeed")]
+    [InlineData("CarriageReturn")]
+    [InlineData("QuotedBackslash")]
+    [InlineData("TabUnicodeSeparator")]
+    public void Generated_string_literals_compile_and_preserve_attribute_values(string caseName)
+    {
+        var value = caseName switch
+        {
+            "LineFeed" => "line\nfeed", "CarriageReturn" => "carriage\rreturn",
+            "QuotedBackslash" => "quote\"and\\slash", _ => "tab\tvalue\u2028next"
+        };
+        var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
+        var input = Input(Command("[TextCommand(" + literal + ")]", "LiteralCommand"));
+        Assert.Empty(input.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        var (driver, output) = Run(input);
+        Assert.Empty(driver.GetRunResult().Diagnostics);
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        var generated = driver.GetRunResult().GeneratedTrees.Single();
+        var strings = generated.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LiteralExpressionSyntax>()
+            .Where(n => n.IsKind(SyntaxKind.StringLiteralExpression)).Select(n => n.Token.ValueText);
+        Assert.Contains(value, strings);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Mixed_case_comparison_conflicts_are_diagnosed_in_either_declaration_order(bool exactFirst)
+    {
+        var exact = Command("[TextCommand(false, \"Hello\")]", "Exact");
+        var ignoringCase = Command("[TextCommand(true, \"HELLO\")]", "IgnoringCase");
+        var (driver, _) = Run(Input(exactFirst ? exact + ignoringCase : ignoringCase + exact));
+        Assert.Equal("TBK003", Assert.Single(driver.GetRunResult().Diagnostics).Id);
+    }
+
+    [Fact]
+    public void Distinct_case_sensitive_triggers_do_not_conflict()
+    {
+        var (driver, output) = Run(Input(Command("[TextCommand(false, \"Hello\", \"hello\")]", "Exact")));
+        Assert.Empty(driver.GetRunResult().Diagnostics);
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
 }

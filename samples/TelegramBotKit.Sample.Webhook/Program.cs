@@ -1,4 +1,5 @@
 using Telegram.Bot.Types;
+using Microsoft.Extensions.Options;
 using TelegramBotKit;
 using TelegramBotKit.Commands;
 using TelegramBotKit.DependencyInjection;
@@ -13,14 +14,22 @@ builder.Services.AddMessageCommand<StartCommand>("/start");
 builder.Services.AddTelegramBotKitWebhook(options =>
     builder.Configuration.GetSection("Webhook").Bind(options));
 
-var app = builder.Build();
-app.MapTelegramBotKitWebhook();
+try
+{
+    var app = builder.Build();
+    app.MapTelegramBotKitWebhook();
 
-// Explicit deployment operation. Starting or stopping the server alone never changes Telegram.
-if (builder.Configuration.GetValue<bool>("RegisterWebhook"))
-    await app.Services.SetTelegramBotKitWebhookAsync();
+    // Explicit deployment operation. Starting or stopping the server alone never changes Telegram.
+    if (builder.Configuration.GetValue<bool>("RegisterWebhook"))
+        await app.Services.SetTelegramBotKitWebhookAsync();
 
-await app.RunAsync();
+    await app.RunAsync();
+}
+catch (OptionsValidationException error)
+{
+    Console.Error.WriteLine("Configuration error: " + string.Join("; ", error.Failures));
+    Environment.ExitCode = 1;
+}
 
 /// <summary>Replies to /start to demonstrate webhook command delivery.</summary>
 public sealed class StartCommand : IMessageCommand

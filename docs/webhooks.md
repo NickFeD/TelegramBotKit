@@ -1,8 +1,9 @@
 # ASP.NET Core webhooks
 
-The working tree provides `TelegramBotKit.Webhook.AspNetCore` for an existing
-ASP.NET Core application. This is a new package for the next release; installing
-the currently published 0.4.0 preview does not provide these APIs.
+Version 0.4.0 introduces `TelegramBotKit.Webhook.AspNetCore` for an existing
+ASP.NET Core application. This guide targets the upcoming stable release;
+earlier published packages do not provide these APIs.
+For all changes since 0.3.2, see the [migration guide](migration-0.3.2-to-0.4.0.md).
 
 ```csharp
 using TelegramBotKit.DependencyInjection;
@@ -128,9 +129,9 @@ name `AddTelegramBotKitPolling()` remains the same. Add the Hosting namespace
 separately when configuring shared execution.
 
 This package/API move is a source and binary compatibility break relative to
-the published preview. Consumers must rebuild against the new package set;
+0.3.2 and the earlier published preview. Consumers must rebuild against the new package set;
 the previous Hosting package cannot forward to Polling without reversing the
-intended dependency direction. No version bump or publication has been performed.
+intended dependency direction.
 PhotoSelector intentionally still exercises published packages and retains the
 old reference until its separate migration.
 

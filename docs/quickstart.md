@@ -9,12 +9,16 @@ This guide builds the smallest polling bot with one `/start` command.
 ```bash
 dotnet new console -n MyBot -f net10.0
 cd MyBot
-dotnet add package TelegramBotKit
-dotnet add package TelegramBotKit.Polling
+dotnet add package TelegramBotKit --version 0.4.0
+dotnet add package TelegramBotKit.Polling --version 0.4.0
 ```
 
-`TelegramBotKit.Generators` is optional. Without it, `AddCommands()` discovers
-attributed commands through its reflection fallback.
+This guide targets the upcoming stable 0.4.0 release; the package commands require
+that version to be published. Core bundles the command generator;
+`AddCommands()` uses generated registrations and has no reflection fallback.
+Source-based repository samples reference the compiler project explicitly.
+For an existing bot, follow the [0.3.2 → 0.4.0 migration guide](migration-0.3.2-to-0.4.0.md).
+See [generated commands](generated-commands.md) for packaging details.
 
 ## 2. Add configuration
 

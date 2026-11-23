@@ -441,8 +441,8 @@
       },
       "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "Transitive",
-        "resolved": "2.1.11",
-        "contentHash": "Ev2ytaXiOlWZ4b3R67GZBsemTINslLD1DCJr2xiacpn4tbapu0Q4dHEzSvZSMnVWeE5nlObU3VZN2p81q3XOYQ=="
+        "resolved": "2.1.13",
+        "contentHash": "D2UAuiGxFYBqeRXjjjGgvJ5UQifzn6wefmSqeKU7XcNGKLbJRP6X7kcPZ6opOBJGdCIlgbSxTvDpBbLvsN594A=="
       },
       "SQLitePCLRaw.provider.e_sqlite3": {
         "type": "Transitive",
@@ -538,9 +538,10 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.3, )",
-          "TelegramBotKit": "[0.4.0-preview, )",
-          "TelegramBotKit.Hosting": "[0.4.0-preview, )",
-          "TelegramBotKit.Routing": "[0.4.0-preview, )"
+          "SQLitePCLRaw.lib.e_sqlite3": "[2.1.13, )",
+          "TelegramBotKit": "[0.4.0-preview.1, )",
+          "TelegramBotKit.Hosting": "[0.4.0-preview.1, )",
+          "TelegramBotKit.Routing": "[0.4.0-preview.1, )"
         }
       }
     }

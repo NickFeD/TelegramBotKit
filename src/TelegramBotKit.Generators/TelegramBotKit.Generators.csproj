@@ -36,6 +36,8 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all" />
+		<AdditionalFiles Include="../../docs/analyzers/AnalyzerReleases.Shipped.md" />
+		<AdditionalFiles Include="../../docs/analyzers/AnalyzerReleases.Unshipped.md" />
 	</ItemGroup>
 
 	<!-- ВАЖНО: упаковываем именно собранную DLL генератора -->

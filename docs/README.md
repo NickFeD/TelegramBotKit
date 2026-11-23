@@ -9,6 +9,9 @@ If you are new to TelegramBotKit, start with:
 
 ## Start here
 
+Upgrading from 0.3.2? Read the [0.4.0 migration guide](migration-0.3.2-to-0.4.0.md)
+for package changes, route replacements and generated command registration.
+
 1. [Quick Start — minimal polling bot](quickstart.md)
 2. [Processing pipeline — middleware → update routes → terminal/fallback](processing-pipeline.md)
 
@@ -30,6 +33,7 @@ If you are new to TelegramBotKit, start with:
 
 ## Project docs
 
+- [ConsolePolling verification](samples/console-polling.md) — manual scenarios, expected results and sample dependencies
 - [PhotoSelector sample](samples/photo-selector.md) — media browsing, selection and export
 - [Webhook sample](samples/webhook.md) — configuration and explicit webhook registration
 - [Benchmarks](benchmarks.md) — reproducible performance measurements and their limits

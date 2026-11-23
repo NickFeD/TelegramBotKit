@@ -139,25 +139,25 @@
       "telegrambotkit.hosting": {
         "type": "Project",
         "dependencies": {
-          "TelegramBotKit": "[0.4.0-preview.1, )"
+          "TelegramBotKit": "[0.4.0, )"
         }
       },
       "telegrambotkit.polling": {
         "type": "Project",
         "dependencies": {
-          "TelegramBotKit.Hosting": "[0.4.0-preview.1, )"
+          "TelegramBotKit.Hosting": "[0.4.0, )"
         }
       },
       "telegrambotkit.routing": {
         "type": "Project",
         "dependencies": {
-          "TelegramBotKit": "[0.4.0-preview.1, )"
+          "TelegramBotKit": "[0.4.0, )"
         }
       },
       "telegrambotkit.webhook.aspnetcore": {
         "type": "Project",
         "dependencies": {
-          "TelegramBotKit.Hosting": "[0.4.0-preview.1, )"
+          "TelegramBotKit.Hosting": "[0.4.0, )"
         }
       }
     }

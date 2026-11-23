@@ -115,6 +115,7 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             OnCanceled: () => tcs.TrySetCanceled(ct),
             OnError: ex => tcs.TrySetException(ex));
 
+        item.CallerCancellation = ct.UnsafeRegister(static state => ((OutgoingItem)state!).OnCanceled(), item);
         _ = TryWriteOrEnqueueAsync(item, ct);
         return tcs.Task;
     }
@@ -152,6 +153,7 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             OnCanceled: () => tcs.TrySetCanceled(ct),
             OnError: ex => tcs.TrySetException(ex));
 
+        item.CallerCancellation = ct.UnsafeRegister(static state => ((OutgoingItem)state!).OnCanceled(), item);
         _ = TryWriteOrEnqueueAsync(item, ct);
         return tcs.Task;
     }
@@ -167,10 +169,12 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
 
     private async Task EnqueueSlowAsync(OutgoingItem item, CancellationToken callerToken)
     {
+        var admitted = false;
         try
         {
             // If the channel is completed (e.g. during shutdown), this will fail quickly.
             await _queue.Writer.WriteAsync(item, callerToken).ConfigureAwait(false);
+            admitted = true;
         }
         catch (OperationCanceledException)
         {
@@ -184,6 +188,10 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         catch (Exception ex)
         {
             item.OnError(ex);
+        }
+        finally
+        {
+            if (!admitted) item.CallerCancellation.Dispose();
         }
     }
 
@@ -201,7 +209,17 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         }
         catch (Exception ex)
         {
+            _queue.Writer.TryComplete(ex);
             _log.LogError(ex, "QueuedMessageSender worker crashed.");
+        }
+        finally
+        {
+            // Complete every admitted caller even if iteration ends before the buffer is drained.
+            while (_queue.Reader.TryRead(out var pending))
+            {
+                pending.OnCanceled();
+                pending.CallerCancellation.Dispose();
+            }
         }
     }
 
@@ -252,6 +270,7 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         finally
         {
             linked?.Dispose();
+            item.CallerCancellation.Dispose();
         }
     }
 
@@ -321,7 +340,8 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
             return delay > TimeSpan.Zero;
         }
 
-        if (ex is HttpRequestException)
+        // Telegram.Bot wraps transport exceptions before returning them to the sender.
+        if (ex is HttpRequestException or RequestException { InnerException: HttpRequestException })
         {
             delay = CalculateBackoff(attempt);
             return delay > TimeSpan.Zero;
@@ -370,8 +390,8 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
     {
         try
         {
-            _stop.Cancel();
             _queue.Writer.TryComplete();
+            _stop.Cancel();
         }
         catch
         {
@@ -393,5 +413,8 @@ internal sealed class QueuedMessageSender : IMessageSender, IAsyncDisposable
         CancellationToken CallerToken,
         Func<CancellationToken, Task> RunOnceAsync,
         Action OnCanceled,
-        Action<Exception> OnError);
+        Action<Exception> OnError)
+    {
+        internal CancellationTokenRegistration CallerCancellation { get; set; }
+    }
 }

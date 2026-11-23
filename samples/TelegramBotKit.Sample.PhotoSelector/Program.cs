@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using TelegramBotKit.DependencyInjection;
 using TelegramBotKit.Fallbacks;
 using TelegramBotKit.Hosting;
@@ -15,8 +16,12 @@ using TelegramBotKit.Sample.PhotoSelector.Infrastructure;
 using TelegramBotKit.Sample.PhotoSelector.Media;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Logging.ClearProviders().AddConsole();
 builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddUserSecrets("TelegramBotKit.Sample.PhotoSelector");
+builder.Configuration.AddEnvironmentVariables();
+builder.Configuration.AddCommandLine(args);
 
 var botToken = builder.Configuration["TELEGRAM_BOT_TOKEN"];
 if (string.IsNullOrWhiteSpace(botToken))

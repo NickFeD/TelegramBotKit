@@ -20,8 +20,9 @@ over the handler's attribute. Explicit callback keys remain supported.
 
 Explicit generic `AddMessageCommand<T>`, `AddTextCommand<T>`,
 `AddCallbackCommand<T>` and the optional Routing package's fluent helpers remain
-available without generated discovery. No changes were made to pipeline,
-scheduler, messaging or waiter implementations.
+available without generated discovery. Bundling the generator is one part of
+0.4.0; see the [full migration guide](migration-0.3.2-to-0.4.0.md) for the other
+API and behavior changes since 0.3.2.
 
 ## Compatibility and migration
 
@@ -40,11 +41,31 @@ scheduler, messaging or waiter implementations.
 - Removing command discovery reflection does not remove reflection inside DI or
   other dependencies and does not establish Native AOT compatibility.
 
-No package version bump/publication has been performed. This describes the local
-next-release package, not a change to already published packages. PhotoSelector
-continues to use published package references by design.
+This describes the upcoming stable 0.4.0 package. Already published packages keep
+their original contents. PhotoSelector continues to use published preview package
+references by design and needs a separate migration.
 
-## Validation
+## Generator diagnostics
+
+### TBK001
+
+Duplicate slash command keys are errors. Slash keys use case-insensitive comparison.
+Give each command a distinct key.
+
+### TBK002
+
+Duplicate callback keys are errors. Give each callback handler a distinct key.
+
+### TBK003
+
+Conflicting text triggers are errors. Two case-sensitive triggers may differ only
+by case. If either trigger ignores case, matching values conflict regardless of
+declaration order. Change the trigger or its comparison policy.
+
+Generated attribute strings preserve quotes, backslashes and control characters
+as valid C# string literals.
+
+## Package validation
 
 `.github/tools/validate-generated-package.ps1` packs a local Core version and runs a
 consumer with only Core, then with only Routing and a transitive Core dependency.

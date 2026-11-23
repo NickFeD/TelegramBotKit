@@ -18,6 +18,7 @@ Its core features include:
 
 See the [documentation index](docs/README.md) for feature guides and the
 [Quick Start](docs/quickstart.md) for the smallest working bot.
+Upgrading an existing bot? Follow the [0.3.2 → 0.4.0 migration guide](docs/migration-0.3.2-to-0.4.0.md).
 
 ## Packages
 
@@ -77,7 +78,8 @@ route-local middleware, or deliberately replace a built-in route.
   command, and polling.
 - `TelegramBotKit.Sample.ConsolePolling` demonstrates commands, fallbacks, global and
   typed route middleware, an edited-message route, keyboards, conversations, and the
-  queued sender.
+  queued sender. Follow the [manual verification checklist](docs/samples/console-polling.md)
+  for actions, expected responses and the sample's limits.
 
 ```bash
 dotnet run --project samples/TelegramBotKit.Sample.MinimalPolling
