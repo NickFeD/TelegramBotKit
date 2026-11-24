@@ -101,7 +101,7 @@ jobs:
           fi
 
       - name: NuGet login (Trusted Publishing / OIDC)
-        if: env.NUGET_API_KEY == '' && env.NUGET_USER != ''
+        if: env.NUGET_USER != ''
         uses: NuGet/login@v1
         id: nugetlogin
         with:
@@ -110,13 +110,14 @@ jobs:
       - name: Publish to nuget.org
         shell: bash
         env:
-          OIDC_KEY: ${{ steps.nugetlogin.outputs.key }}
+          OIDC_KEY: ${{ steps.nugetlogin.outputs.NUGET_API_KEY }}
         run: |
           set -euo pipefail
 
-          KEY="${NUGET_API_KEY:-}"
-          if [ -z "$KEY" ]; then
+          if [ -n "${NUGET_USER:-}" ]; then
             KEY="${OIDC_KEY:-}"
+          else
+            KEY="${NUGET_API_KEY:-}"
           fi
           if [ -z "$KEY" ]; then
             echo "NuGet API key is empty." >&2

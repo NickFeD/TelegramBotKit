@@ -71,7 +71,7 @@ requests and uploads package and symbol artifacts. Both workflows install
 SDK 11.0.100 through `global.json` with roll-forward disabled. Both workflows also
 install the 8, 9, 10 and 11 SDK channels to provide the corresponding runtimes.
 
-`.github/workflows/publish-on-version-bump.yml` publishes on pushes to `master`
+`.github/workflows/release.yml` publishes on pushes to `master`
 or manual `workflow_dispatch`. **Manual dispatch publishes; it is not a dry run.**
 The workflow is serialized and:
 
@@ -109,8 +109,11 @@ committed sources. Local validation of uncommitted changes is not a published re
 
 Set `NUGET_API_KEY` for classic authentication, or configure a nuget.org Trusted
 Publishing policy for this repository and workflow file
-`publish-on-version-bump.yml`, then set `NUGET_USER` to the NuGet profile name.
-The API key takes precedence; otherwise `NuGet/login@v1` uses GitHub OIDC.
+`release.yml`, then set `NUGET_USER` to the NuGet profile name.
+When `NUGET_USER` is set, `NuGet/login@v1` uses GitHub OIDC and its temporary key
+takes precedence over any existing `NUGET_API_KEY`. Otherwise the classic API key is used.
+The policy must name the exact workflow file `release.yml`;
+leave Environment blank because this workflow does not declare a GitHub environment.
 Neither secret is needed for local validation or ordinary CI.
 
 ## 0.4.0 scope
